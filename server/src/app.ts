@@ -12,10 +12,15 @@ import { logger } from './utils/logger';
 export function createApp(): express.Express {
   const app = express();
 
+  const allowedOrigins = config.corsOrigin
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.use(helmet());
   app.use(
     cors({
-      origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(','),
+      origin: config.corsOrigin.trim() === '*' ? true : allowedOrigins,
       credentials: true,
     }),
   );
