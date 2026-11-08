@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum SimulationStatus {
+  STABLE
+  RUNNING
+  OSCILLATION_GUARD
+  BUS_CONFLICT
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  username         String            @unique
+  passwordHash     String            @map("password_hash")
+  fullName         String            @map("full_name")
+  role             UserRole          @default(STUDENT)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  circuits         Circuit[]
+  revisions        CircuitRevision[]
+  customComponents CustomComponent[]
+  simulationRuns   SimulationRun[]
+
+  @@map("users")
+}
+
+model Circuit {
+  id             String            @id @default(uuid())
+  title          String
+  description    String            @default("")
+  category       String            @default("Комбінаційні схеми")
+  isPublic       Boolean           @default(true) @map("is_public")
+  tags           String[]          @default([])
+  schemaJson     Json              @map("schema_json")
+  nodeCount      Int               @default(0) @map("node_count")
+  edgeCount      Int               @default(0) @map("edge_count")
+  criticalPathNs Float             @default(0) @map("critical_path_ns")
+  maxClockMhz    Float             @default(1000) @map("max_clock_mhz")
+  authorId       String            @map("author_id")
+  author         User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  forkedFromId   String?           @map("forked_from_id")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  revisions      CircuitRevision[]
+  simulationRuns SimulationRun[]
+
+  @@index([authorId])
+  @@index([category])
+  @@index([isPublic])
+  @@map("circuits")
+}
+
+model CircuitRevision {
+  id            String   @id @default(uuid())
+  circuitId     String   @map("circuit_id")
+  circuit       Circuit  @relation(fields: [circuitId], references: [id], onDelete: Cascade)
+  versionNumber Int      @map("version_number")
+  commitMessage String   @map("commit_message")
+  schemaJson    Json     @map("schema_json")
+  nodeCount     Int      @default(0) @map("node_count")
+  edgeCount     Int      @default(0) @map("edge_count")
+  createdById   String   @map("created_by_id")
+  createdBy     User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([circuitId, versionNumber])
+  @@index([circuitId])
+  @@map("circuit_revisions")
+}
+
+model CustomComponent {
+  id                 String   @id @default(uuid())
+  name               String
+  code               String
+  description        String   @default("")
+  propagationDelayNs Float    @default(15) @map("propagation_delay_ns")
+  definitionJson     Json     @map("definition_json")
+  isShared           Boolean  @default(true) @map("is_shared")
+  authorId           String   @map("author_id")
+  author             User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([authorId])
+  @@map("custom_components")
+}
+
+model SimulationRun {
+  id                 String           @id @default(uuid())
+  circuitId          String           @map("circuit_id")
+  circuit            Circuit          @relation(fields: [circuitId], references: [id], onDelete: Cascade)
+  executedById       String?          @map("executed_by_id")
+  executedBy         User?            @relation(fields: [executedById], references: [id], onDelete: SetNull)
+  durationSimNs      Float            @map("duration_sim_ns")
+  processedEvents    Int              @map("processed_events")
+  criticalPathNs     Float            @map("critical_path_ns")
+  status             SimulationStatus @default(STABLE)
+  summaryPayloadJson Json?            @map("summary_payload_json")
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@index([circuitId])
+  @@map("simulation_runs")
+}

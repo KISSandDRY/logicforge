@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes wirePulse {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.wire-active-flow {
+  stroke-dasharray: 8 4;
+  animation: wirePulse 0.75s linear infinite;
+}
+
+.cad-grid-bg {
+  background-color: #090d16;
+  background-image:
+    radial-gradient(circle, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+    linear-gradient(to right, rgba(30, 41, 59, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 41, 59, 0.35) 1px, transparent 1px);
+  background-size:
+    16px 16px,
+    80px 80px,
+    80px 80px;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

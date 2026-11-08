@@ -1,0 +1,4 @@
+[codespell]
+skip = ./node_modules,./package-lock.json,./*/dist,./*/coverage,./.git,./server/.data,./server/logs
+ignore-words-list = crate,nd,inout,thist,pres,ser,te,vas
+check-filenames = true

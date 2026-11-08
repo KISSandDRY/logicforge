@@ -1,0 +1,25 @@
+{
+  "name": "@logicforge/shared-types",
+  "version": "1.0.0",
+  "description": "Спільні типи даних, специфікація JSON-схем та гібридне алгоритмічне ядро симуляції цифрових схем",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc -b --watch",
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.6",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.6"
+  }
+}

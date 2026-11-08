@@ -1,0 +1,25 @@
+databases:
+  - name: logicforge-postgres
+    plan: free
+    databaseName: logicforge_db
+    user: logicforge
+
+services:
+  - type: web
+    name: logicforge-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build -w @logicforge/shared-types && npm run db:generate -w @logicforge/server && npm run build -w @logicforge/server
+    startCommand: cd server && npx prisma migrate deploy && npm run db:seed && node dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: logicforge-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false

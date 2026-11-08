@@ -1,0 +1,51 @@
+{
+  "name": "logicforge-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Веб-орієнтована інформаційна система моделювання та симуляції цифрових логічних схем (LogicForge Studio)",
+  "workspaces": [
+    "shared-types",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n SHARED,SERVER,CLIENT -c cyan,green,magenta \"npm run dev -w @logicforge/shared-types\" \"npm run dev -w @logicforge/server\" \"npm run dev -w @logicforge/client\"",
+    "build": "npm run build -w @logicforge/shared-types && npm run build -w @logicforge/server && npm run build -w @logicforge/client",
+    "start": "npm run start -w @logicforge/server",
+    "test": "npm run build -w @logicforge/shared-types && npm run test -w @logicforge/shared-types && npm run test -w @logicforge/server",
+    "test:coverage": "npm run build -w @logicforge/shared-types && npm run test:coverage -w @logicforge/shared-types",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,css,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,css,md,yml,yaml}\"",
+    "typecheck": "npm run build -w @logicforge/shared-types && npm run typecheck -w @logicforge/shared-types && npm run typecheck -w @logicforge/server && npm run typecheck -w @logicforge/client",
+    "spellcheck": "codespell",
+    "db:generate": "npm run db:generate -w @logicforge/server",
+    "db:migrate": "npm run db:migrate -w @logicforge/server",
+    "db:seed": "npm run db:seed -w @logicforge/server",
+    "check": "npm run spellcheck && npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^22.10.1",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.15.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "prettier": "^3.4.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.16.0"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "esbuild@0.25.12": true,
+    "prisma@6.19.3": true
+  }
+}

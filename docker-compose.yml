@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: logicforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: logicforge
+      POSTGRES_PASSWORD: logicforge_secret
+      POSTGRES_DB: logicforge_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U logicforge -d logicforge_db']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: logicforge-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://logicforge:logicforge_secret@postgres:5432/logicforge_db?schema=public
+      JWT_SECRET: logicforge-docker-jwt-secret-2026
+      CORS_ORIGIN: http://localhost:8080,http://localhost:5173
+    ports:
+      - '4000:4000'
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: logicforge-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:
