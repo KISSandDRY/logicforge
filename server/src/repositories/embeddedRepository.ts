@@ -6,12 +6,13 @@ import {
   PRESET_CIRCUITS,
   analyzeCircuitGraph,
   buildHalfAdderCustomIc,
+  stripUnsafeKeys,
   type CircuitDetailDTO,
-  type CircuitDocument,
   type CircuitRevisionDTO,
   type CircuitSummaryDTO,
   type CustomICDefinition,
 } from '@logicforge/shared-types';
+import { config, DEMO_USER_CONFIG } from '../config';
 import type {
   CreateCircuitInput,
   IStorageRepository,
@@ -32,6 +33,10 @@ interface EmbeddedStoreData {
   simulationRuns: SimulationRunRecord[];
 }
 
+function cloneDeep<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export class EmbeddedRepository implements IStorageRepository {
   public readonly driverName = 'embedded-json' as const;
   private store: EmbeddedStoreData;
@@ -46,7 +51,7 @@ export class EmbeddedRepository implements IStorageRepository {
     if (this.persistFilePath && fs.existsSync(this.persistFilePath)) {
       try {
         const raw = fs.readFileSync(this.persistFilePath, 'utf8');
-        this.store = JSON.parse(raw) as EmbeddedStoreData;
+        this.store = stripUnsafeKeys(JSON.parse(raw)) as EmbeddedStoreData;
         const seeded = this.createSeededStore();
         let updated = false;
         for (const presetCircuit of seeded.circuits) {
@@ -80,20 +85,22 @@ export class EmbeddedRepository implements IStorageRepository {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(this.persistFilePath, JSON.stringify(this.store, null, 2), 'utf8');
+    const tmpPath = `${this.persistFilePath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(this.store, null, 2), 'utf8');
+    fs.renameSync(tmpPath, this.persistFilePath);
   }
 
   private createSeededStore(): EmbeddedStoreData {
-    const demoUserId = 'u-demo-lpnu-001';
-    const passwordHash = bcrypt.hashSync('DemoPass123!', 12);
+    const demoUserId = DEMO_USER_CONFIG.id;
+    const passwordHash = bcrypt.hashSync(DEMO_USER_CONFIG.password, config.bcryptCost);
     const now = '2026-11-06T12:00:00.000Z';
 
     const demoUser: StoredUserRecord = {
       id: demoUserId,
-      email: 'student@lpnu.ua',
-      username: 'lpnu_engineer',
-      fullName: 'Інженер-схемотехнік',
-      role: 'STUDENT',
+      email: DEMO_USER_CONFIG.email,
+      username: DEMO_USER_CONFIG.username,
+      fullName: DEMO_USER_CONFIG.fullName,
+      role: DEMO_USER_CONFIG.role,
       passwordHash,
       createdAt: now,
     };
@@ -104,7 +111,7 @@ export class EmbeddedRepository implements IStorageRepository {
     for (const preset of PRESET_CIRCUITS) {
       const timing = analyzeCircuitGraph(preset.document);
       const cid = preset.id;
-      const clonedDoc = JSON.parse(JSON.stringify(preset.document)) as CircuitDocument;
+      const clonedDoc = cloneDeep(preset.document);
 
       circuits.push({
         id: cid,
@@ -134,7 +141,7 @@ export class EmbeddedRepository implements IStorageRepository {
         authorName: demoUser.fullName,
         createdById: demoUserId,
         createdAt: clonedDoc.metadata.createdAt,
-        schemaJson: JSON.parse(JSON.stringify(clonedDoc)) as CircuitDocument,
+        schemaJson: cloneDeep(clonedDoc),
       });
 
       if (cid === 'preset-full-adder') {
@@ -148,7 +155,7 @@ export class EmbeddedRepository implements IStorageRepository {
           authorName: demoUser.fullName,
           createdById: demoUserId,
           createdAt: clonedDoc.metadata.updatedAt,
-          schemaJson: JSON.parse(JSON.stringify(clonedDoc)) as CircuitDocument,
+          schemaJson: cloneDeep(clonedDoc),
         });
       }
     }
@@ -243,14 +250,14 @@ export class EmbeddedRepository implements IStorageRepository {
 
   public async getCircuitById(id: string): Promise<CircuitDetailDTO | null> {
     const found = this.store.circuits.find((c) => c.id === id);
-    return found ? JSON.parse(JSON.stringify(found)) : null;
+    return found ? cloneDeep(found) : null;
   }
 
   public async createCircuit(input: CreateCircuitInput): Promise<CircuitDetailDTO> {
     const author = await this.findUserById(input.authorId);
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
-    const clonedSchema = JSON.parse(JSON.stringify(input.schemaJson)) as CircuitDocument;
+    const clonedSchema = cloneDeep(input.schemaJson);
 
     const record: CircuitDetailDTO & { forkedFromId?: string } = {
       id,
@@ -282,10 +289,10 @@ export class EmbeddedRepository implements IStorageRepository {
       authorName: record.authorName,
       createdById: input.authorId,
       createdAt: now,
-      schemaJson: JSON.parse(JSON.stringify(clonedSchema)) as CircuitDocument,
+      schemaJson: cloneDeep(clonedSchema),
     });
     this.flush();
-    return JSON.parse(JSON.stringify(record));
+    return cloneDeep(record);
   }
 
   public async updateCircuit(
@@ -297,7 +304,7 @@ export class EmbeddedRepository implements IStorageRepository {
 
     const editor = await this.findUserById(input.editorUserId);
     const now = new Date().toISOString();
-    const clonedSchema = JSON.parse(JSON.stringify(input.schemaJson)) as CircuitDocument;
+    const clonedSchema = cloneDeep(input.schemaJson);
 
     const existing = this.store.circuits[idx];
     existing.title = input.title;
@@ -326,11 +333,11 @@ export class EmbeddedRepository implements IStorageRepository {
       authorName: editor?.fullName ?? existing.authorName,
       createdById: input.editorUserId,
       createdAt: now,
-      schemaJson: JSON.parse(JSON.stringify(clonedSchema)) as CircuitDocument,
+      schemaJson: cloneDeep(clonedSchema),
     });
 
     this.flush();
-    return JSON.parse(JSON.stringify(existing));
+    return cloneDeep(existing);
   }
 
   public async deleteCircuit(id: string): Promise<boolean> {
@@ -347,7 +354,7 @@ export class EmbeddedRepository implements IStorageRepository {
     return this.store.revisions
       .filter((r) => r.circuitId === circuitId)
       .sort((a, b) => b.versionNumber - a.versionNumber)
-      .map(({ createdById: _c, ...dto }) => JSON.parse(JSON.stringify(dto)));
+      .map(({ createdById: _c, ...dto }) => cloneDeep(dto));
   }
 
   public async getRevision(
@@ -359,7 +366,7 @@ export class EmbeddedRepository implements IStorageRepository {
     );
     if (!found) return null;
     const { createdById: _c, ...dto } = found;
-    return JSON.parse(JSON.stringify(dto));
+    return cloneDeep(dto);
   }
 
   public async restoreRevision(
@@ -389,7 +396,7 @@ export class EmbeddedRepository implements IStorageRepository {
   public async listCustomComponents(viewerUserId?: string): Promise<CustomICDefinition[]> {
     return this.store.customComponents
       .filter((c) => c.isShared || (viewerUserId && c.authorId === viewerUserId))
-      .map((c) => JSON.parse(JSON.stringify(c.definition)));
+      .map((c) => cloneDeep(c.definition));
   }
 
   public async createCustomComponent(
@@ -398,7 +405,7 @@ export class EmbeddedRepository implements IStorageRepository {
     isShared: boolean,
   ): Promise<CustomICDefinition> {
     const created: CustomICDefinition = {
-      ...JSON.parse(JSON.stringify(def)),
+      ...cloneDeep(def),
       id: `ic-${crypto.randomUUID().slice(0, 8)}`,
     };
     this.store.customComponents.push({
@@ -423,14 +430,14 @@ export class EmbeddedRepository implements IStorageRepository {
     const { isShared, ...defPatch } = patch;
     entry.definition = {
       ...entry.definition,
-      ...JSON.parse(JSON.stringify(defPatch)),
+      ...cloneDeep(defPatch),
       id: entry.definition.id,
     };
     if (isShared !== undefined) {
       entry.isShared = isShared;
     }
     this.flush();
-    return JSON.parse(JSON.stringify(entry.definition));
+    return cloneDeep(entry.definition);
   }
 
   public async deleteCustomComponent(id: string, userId: string): Promise<boolean> {

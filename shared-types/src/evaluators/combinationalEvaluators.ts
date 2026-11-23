@@ -1,4 +1,5 @@
 import {
+  evaluateParity4Bit,
   logicAnd,
   logicBuffer,
   logicNand,
@@ -28,6 +29,7 @@ export type CombinationalComponentType =
   | 'XOR'
   | 'XNOR'
   | 'TRI_BUFFER'
+  | 'PARITY_4BIT'
   | 'LED'
   | 'PROBE'
   | 'SEVEN_SEGMENT';
@@ -61,6 +63,13 @@ export const COMBINATIONAL_EVALUATORS: Record<CombinationalComponentType, NodeEv
   TRI_BUFFER: (node, ctx) => ({
     Y: logicTriStateBuffer(ctx.getPin(node.id, 'D'), ctx.getPin(node.id, 'EN')),
   }),
+  PARITY_4BIT: (node, ctx) =>
+    evaluateParity4Bit(
+      ctx.getPin(node.id, 'D0'),
+      ctx.getPin(node.id, 'D1'),
+      ctx.getPin(node.id, 'D2'),
+      ctx.getPin(node.id, 'D3'),
+    ),
   LED: evalNoOutputs,
   PROBE: evalNoOutputs,
   SEVEN_SEGMENT: evalNoOutputs,

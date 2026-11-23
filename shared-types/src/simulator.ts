@@ -98,46 +98,44 @@ export class CircuitSimulator {
     }
 
     for (const rawNode of doc.nodes) {
-      const cloned: CircuitNodeData = {
-        ...rawNode,
-        position: { ...rawNode.position },
-        properties: { ...rawNode.properties },
-        pins: rawNode.pins.map((p) => ({ ...p, offset: { ...p.offset } })),
-      };
-      this.nodes.set(cloned.id, cloned);
-
-      for (const pin of cloned.pins) {
-        const dipIdx =
-          cloned.type === 'DIP_SWITCH_4' && pin.id.startsWith('Q') ? Number(pin.id.slice(1)) : -1;
-        const initial: LogicState =
-          cloned.type === 'CONST_HIGH' && pin.direction === 'OUTPUT'
-            ? '1'
-            : cloned.type === 'CONST_LOW' && pin.direction === 'OUTPUT'
-              ? '0'
-              : (cloned.type === 'INPUT_SWITCH' || cloned.type === 'PUSH_BUTTON') &&
-                  pin.direction === 'OUTPUT'
-                ? (cloned.properties.switchState ?? '0')
-                : dipIdx >= 0 && dipIdx < 4
-                  ? (cloned.properties.dipSwitchStates?.[dipIdx] ?? '0')
-                  : pin.direction === 'INPUT'
-                    ? 'Z'
-                    : '0';
-        this.pinStates.set(pinKey(cloned.id, pin.id), initial);
-      }
-
-      this.seqMemory.set(cloned.id, {
-        q: '0',
-        prevClk: '0',
-        counterValue: 0,
-        timerPhase: 'LOW',
-        nextTimerToggleNs: 0,
-      });
+      this.registerNodeState(rawNode);
     }
 
     this.edges = doc.edges.map((e) => ({ ...e }));
     this.rebuildNets();
     this.bootstrapInitialState();
     this.recordWaveformSample();
+  }
+
+  private registerNodeState(rawNode: CircuitNodeData): void {
+    const cloned: CircuitNodeData = {
+      ...rawNode,
+      position: { ...rawNode.position },
+      properties: { ...rawNode.properties },
+      pins: rawNode.pins.map((p) => ({ ...p, offset: { ...p.offset } })),
+    };
+    this.nodes.set(cloned.id, cloned);
+
+    for (const pin of cloned.pins) {
+      const dipIdx =
+        cloned.type === 'DIP_SWITCH_4' && pin.id.startsWith('Q') ? Number(pin.id.slice(1)) : -1;
+      const initial: LogicState =
+        cloned.type === 'CONST_HIGH' && pin.direction === 'OUTPUT'
+          ? '1'
+          : cloned.type === 'CONST_LOW' && pin.direction === 'OUTPUT'
+            ? '0'
+            : (cloned.type === 'INPUT_SWITCH' || cloned.type === 'PUSH_BUTTON') &&
+                pin.direction === 'OUTPUT'
+              ? (cloned.properties.switchState ?? '0')
+              : dipIdx >= 0 && dipIdx < 4
+                ? (cloned.properties.dipSwitchStates?.[dipIdx] ?? '0')
+                : pin.direction === 'INPUT'
+                  ? 'Z'
+                  : '0';
+      this.pinStates.set(pinKey(cloned.id, pin.id), initial);
+    }
+
+    this.seqMemory.set(cloned.id, createInitialSeqState());
   }
 
   public reset(): void {
@@ -242,38 +240,7 @@ export class CircuitSimulator {
       const existing = this.nodes.get(rawNode.id);
       if (!existing) {
         topologyChanged = true;
-        const cloned: CircuitNodeData = {
-          ...rawNode,
-          position: { ...rawNode.position },
-          properties: { ...rawNode.properties },
-          pins: rawNode.pins.map((p) => ({ ...p, offset: { ...p.offset } })),
-        };
-        this.nodes.set(cloned.id, cloned);
-        for (const pin of cloned.pins) {
-          const dipIdx =
-            cloned.type === 'DIP_SWITCH_4' && pin.id.startsWith('Q') ? Number(pin.id.slice(1)) : -1;
-          const initial: LogicState =
-            cloned.type === 'CONST_HIGH' && pin.direction === 'OUTPUT'
-              ? '1'
-              : cloned.type === 'CONST_LOW' && pin.direction === 'OUTPUT'
-                ? '0'
-                : (cloned.type === 'INPUT_SWITCH' || cloned.type === 'PUSH_BUTTON') &&
-                    pin.direction === 'OUTPUT'
-                  ? (cloned.properties.switchState ?? '0')
-                  : dipIdx >= 0 && dipIdx < 4
-                    ? (cloned.properties.dipSwitchStates?.[dipIdx] ?? '0')
-                    : pin.direction === 'INPUT'
-                      ? 'Z'
-                      : '0';
-          this.pinStates.set(pinKey(cloned.id, pin.id), initial);
-        }
-        this.seqMemory.set(cloned.id, {
-          q: '0',
-          prevClk: '0',
-          counterValue: 0,
-          timerPhase: 'LOW',
-          nextTimerToggleNs: 0,
-        });
+        this.registerNodeState(rawNode);
       } else {
         const prevSwitch = existing.properties.switchState;
         const prevDip = existing.properties.dipSwitchStates;
@@ -894,6 +861,7 @@ export class CircuitSimulator {
         node.type === 'CLOCK' ||
         node.type === 'TIMER_555' ||
         node.type === 'SR_LATCH' ||
+        node.type === 'D_LATCH' ||
         node.type === 'D_FLIPFLOP' ||
         node.type === 'JK_FLIPFLOP' ||
         node.type === 'T_FLIPFLOP' ||

@@ -269,10 +269,10 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Основне вікно демонстрації: Схемотехнічне полотно + Жива панель станів і осцилограми */}
-          <div className="grid lg:grid-cols-[1fr,345px] bg-win-bg p-1.5 gap-2">
+          {/* Основне вікно демонстрації: Схемотехнічне полотно (60%) + Жива панель станів і осцилограми (40%) */}
+          <div className="grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] bg-win-bg p-1.5 gap-2">
             {/* Ліва частина: Інтерактивне полотно схеми, що працює в реальному часі */}
-            <div className="flex flex-col min-w-0">
+            <div data-testid="home-scheme-pane" className="flex flex-col min-w-0">
               <div className="h-[360px] sm:h-[440px] w-full">
                 <CircuitCanvas
                   nodes={heroCanvasNodes}
@@ -339,7 +339,10 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             {/* Права колонка стенда: Живі виходи, часові діаграми сигналів та швидкий старт */}
-            <div className="win95-outset flex flex-col justify-between p-3 space-y-3 min-w-0">
+            <div
+              data-testid="home-info-pane"
+              className="win95-outset flex flex-col justify-between p-3 space-y-3 min-w-0"
+            >
               <div className="space-y-2.5">
                 <div className="win95-statusbar-cell px-2.5 py-1.5">
                   <div className="flex items-center justify-between gap-2">
@@ -397,7 +400,7 @@ export const DashboardPage: React.FC = () => {
                         const lastState =
                           recentHeroSamples[recentHeroSamples.length - 1]?.signals[sigName] ?? '0';
                         const points: string[] = [];
-                        const w = 190;
+                        const w = 240;
                         const h = 24;
                         const minT = recentHeroSamples[0]?.timeNs ?? 0;
                         const maxT =
@@ -422,7 +425,7 @@ export const DashboardPage: React.FC = () => {
                         return (
                           <div
                             key={sigName}
-                            className="win95-statusbar-cell grid grid-cols-[112px_minmax(0,1fr)_auto] items-center gap-2 px-2 py-1"
+                            className="win95-statusbar-cell grid grid-cols-[112px_minmax(0,1fr)_auto] sm:grid-cols-[136px_minmax(0,1fr)_auto] items-center gap-2 px-2 py-1"
                           >
                             <div
                               title={sigName}

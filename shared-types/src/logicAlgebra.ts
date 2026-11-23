@@ -134,6 +134,96 @@ export function logicTriStateBuffer(data: LogicState, enable: LogicState): Logic
   return data;
 }
 
+export function evaluateMux2To1(d0: LogicState, d1: LogicState, s: LogicState): LogicState {
+  const sel = normalizeGateInput(s);
+  if (sel === 'X') {
+    const n0 = normalizeGateInput(d0);
+    if (n0 !== 'X' && normalizeGateInput(d1) === n0) {
+      return n0;
+    }
+    return 'X';
+  }
+  const chosen = sel === '1' ? d1 : d0;
+  return chosen === 'Z' ? 'Z' : normalizeGateInput(chosen);
+}
+
+export function evaluateDemux1To4(
+  d: LogicState,
+  s0: LogicState,
+  s1: LogicState,
+): { Y0: LogicState; Y1: LogicState; Y2: LogicState; Y3: LogicState } {
+  const b0 = s0 === 'Z' ? '0' : normalizeGateInput(s0);
+  const b1 = s1 === 'Z' ? '0' : normalizeGateInput(s1);
+  if (b0 === 'X' || b1 === 'X') {
+    return { Y0: 'X', Y1: 'X', Y2: 'X', Y3: 'X' };
+  }
+  const idx = (b1 === '1' ? 2 : 0) + (b0 === '1' ? 1 : 0);
+  const routed = d === 'Z' ? 'Z' : normalizeGateInput(d);
+  return {
+    Y0: idx === 0 ? routed : '0',
+    Y1: idx === 1 ? routed : '0',
+    Y2: idx === 2 ? routed : '0',
+    Y3: idx === 3 ? routed : '0',
+  };
+}
+
+export function evaluateEncoder4To2(
+  d0: LogicState,
+  d1: LogicState,
+  d2: LogicState,
+  d3: LogicState,
+): { A0: LogicState; A1: LogicState; V: LogicState } {
+  const bits = [d0, d1, d2, d3].map((s) => (s === 'Z' ? '0' : normalizeGateInput(s)));
+  for (let i = 3; i >= 0; i--) {
+    if (bits[i] === 'X') {
+      return { A0: 'X', A1: 'X', V: 'X' };
+    }
+    if (bits[i] === '1') {
+      return {
+        A0: (i & 1) === 1 ? '1' : '0',
+        A1: (i & 2) === 2 ? '1' : '0',
+        V: '1',
+      };
+    }
+  }
+  return { A0: '0', A1: '0', V: '0' };
+}
+
+export function evaluateFullAdder(
+  a: LogicState,
+  b: LogicState,
+  cin: LogicState,
+): { SUM: LogicState; COUT: LogicState } {
+  const va = normalizeGateInput(a);
+  const vb = normalizeGateInput(b);
+  const vc = cin === 'Z' ? '0' : normalizeGateInput(cin);
+  if (va === 'X' || vb === 'X' || vc === 'X') {
+    return { SUM: 'X', COUT: 'X' };
+  }
+  const total = (va === '1' ? 1 : 0) + (vb === '1' ? 1 : 0) + (vc === '1' ? 1 : 0);
+  return {
+    SUM: (total & 1) === 1 ? '1' : '0',
+    COUT: total >= 2 ? '1' : '0',
+  };
+}
+
+export function evaluateParity4Bit(
+  d0: LogicState,
+  d1: LogicState,
+  d2: LogicState,
+  d3: LogicState,
+): { EVEN: LogicState; ODD: LogicState } {
+  const bits = [d0, d1, d2, d3].map((s) => (s === 'Z' ? '0' : normalizeGateInput(s)));
+  if (bits.some((b) => b === 'X')) {
+    return { EVEN: 'X', ODD: 'X' };
+  }
+  const odd = logicXor(bits);
+  return {
+    ODD: odd,
+    EVEN: logicNot(odd),
+  };
+}
+
 export function evaluateMux4To1(
   d: [LogicState, LogicState, LogicState, LogicState],
   s0: LogicState,

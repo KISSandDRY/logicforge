@@ -21,6 +21,9 @@ export interface AppOptions {
 export function createApp(options?: AppOptions): express.Express {
   const app = express();
   app.disable('x-powered-by');
+  if (config.nodeEnv === 'production') {
+    app.set('trust proxy', 1);
+  }
 
   const allowedOrigins = config.corsOrigin
     .split(',')
@@ -104,7 +107,14 @@ export function createApp(options?: AppOptions): express.Express {
   app.use('/api/auth/login', authRateLimiter);
   app.use('/api/auth/register', authRateLimiter);
   app.use('/api/auth/demo', authRateLimiter);
-  app.use('/api/auth', authRouter);
+  app.use(
+    '/api/auth',
+    (_req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store');
+      next();
+    },
+    authRouter,
+  );
 
   app.use('/api/circuits', writeRateLimiter, circuitRouter);
   app.use('/api/components', writeRateLimiter, componentRouter);
@@ -122,7 +132,10 @@ export function createApp(options?: AppOptions): express.Express {
       _next: NextFunction,
     ) => {
       if (err instanceof HttpError) {
-        res.status(err.statusCode).json({ error: err.message });
+        res.status(err.statusCode).json({
+          error: err.message,
+          ...(err.details !== undefined ? { details: err.details } : {}),
+        });
         return;
       }
       if (err instanceof ZodError) {

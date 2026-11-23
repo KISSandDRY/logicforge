@@ -340,6 +340,19 @@ export const MathFormula: React.FC<MathFormulaProps> = ({
             <i>Y</i> = Z <span className="font-normal">при</span> <i>EN</i> = 0
           </span>
         );
+      case 'PARITY_4BIT':
+        return (
+          <span>
+            <i>ODD</i> = <i>D</i>
+            <sub>0</sub> ⊕ <i>D</i>
+            <sub>1</sub> ⊕ <i>D</i>
+            <sub>2</sub> ⊕ <i>D</i>
+            <sub>3</sub>, &nbsp; <i>EVEN</i> ={' '}
+            <Ov>
+              <i>ODD</i>
+            </Ov>
+          </span>
+        );
       case 'SR_LATCH':
         return (
           <span>
@@ -348,6 +361,16 @@ export const MathFormula: React.FC<MathFormulaProps> = ({
               <i>R</i>
             </Ov>
             ·<i>Q</i>(<i>t</i>), &nbsp; <i>S</i> · <i>R</i> = 0
+          </span>
+        );
+      case 'D_LATCH':
+        return (
+          <span>
+            <i>Q</i>(<i>t</i>+1) = <i>EN</i>·<i>D</i> +{' '}
+            <Ov>
+              <i>EN</i>
+            </Ov>
+            ·<i>Q</i>(<i>t</i>)
           </span>
         );
       case 'D_FLIPFLOP':
@@ -413,6 +436,18 @@ export const MathFormula: React.FC<MathFormulaProps> = ({
             <sub>2</sub>)·<i>C</i>)
           </span>
         );
+      case 'MUX_2TO1':
+        return (
+          <span>
+            <i>Y</i> ={' '}
+            <Ov>
+              <i>S</i>
+            </Ov>
+            ·<i>D</i>
+            <sub>0</sub> + <i>S</i>·<i>D</i>
+            <sub>1</sub>
+          </span>
+        );
       case 'MUX_4TO1':
         return (
           <span>
@@ -449,6 +484,15 @@ export const MathFormula: React.FC<MathFormulaProps> = ({
             <sub>3</sub>
           </span>
         );
+      case 'DEMUX_1TO4':
+        return (
+          <span>
+            <i>Y</i>
+            <sub>k</sub> = <i>D</i> <span className="font-normal">при</span> 2<i>S</i>
+            <sub>1</sub> + <i>S</i>
+            <sub>0</sub> = <i>k</i>
+          </span>
+        );
       case 'DECODER_2TO4':
         return (
           <span>
@@ -456,6 +500,26 @@ export const MathFormula: React.FC<MathFormulaProps> = ({
             <sub>k</sub> = <i>EN</i> ∧ (2<i>A</i>
             <sub>1</sub> + <i>A</i>
             <sub>0</sub> = <i>k</i>), &nbsp; <i>k</i> ∈ {'{'}0..3{'}'}
+          </span>
+        );
+      case 'ENCODER_4TO2':
+        return (
+          <span>
+            (<i>A</i>
+            <sub>1</sub>, <i>A</i>
+            <sub>0</sub>) = max{'{'}
+            <i>k</i> : <i>D</i>
+            <sub>k</sub>=1{'}'}, &nbsp; <i>V</i> = ⋁<i>D</i>
+            <sub>k</sub>
+          </span>
+        );
+      case 'FULL_ADDER':
+        return (
+          <span>
+            <i>SUM</i> = <i>A</i> ⊕ <i>B</i> ⊕ <i>C</i>
+            <sub>in</sub>, &nbsp; <i>C</i>
+            <sub>out</sub> = <i>AB</i> + <i>C</i>
+            <sub>in</sub>(<i>A</i> ⊕ <i>B</i>)
           </span>
         );
       case 'COMPARATOR_2BIT':

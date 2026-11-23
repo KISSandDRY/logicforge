@@ -22,7 +22,12 @@ import {
   evaluateAluSlice,
   evaluateComparator2Bit,
   evaluateDecoder2To4,
+  evaluateDemux1To4,
+  evaluateEncoder4To2,
+  evaluateFullAdder,
+  evaluateMux2To1,
   evaluateMux4To1,
+  evaluateParity4Bit,
   extractElectricalNets,
   generateEngineeringReport,
   logicAnd,
@@ -304,7 +309,7 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
   });
 
   it('simulates SR-Latch, 4-bit Counter, Microprocessor ALU, and Custom IC Subcircuits', () => {
-    expect(COMPONENT_CATALOG).toHaveLength(32);
+    expect(COMPONENT_CATALOG).toHaveLength(38);
     expect(PRESET_CIRCUITS).toHaveLength(7);
 
     const aluSim = new CircuitSimulator(buildMicroprocessorAluPreset());
@@ -855,5 +860,215 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
     const oneOne = sim.settleCombinational();
     expect(oneOne.nodePinStates.t_s.IN).toBe('0');
     expect(oneOne.nodePinStates.t_c.IN).toBe('1');
+  });
+
+  it('evaluates MSI components and parity/latch algebra with IEEE 1164 states', () => {
+    expect(evaluateMux2To1('0', '1', '0')).toBe('0');
+    expect(evaluateMux2To1('0', '1', '1')).toBe('1');
+    expect(evaluateMux2To1('1', '1', 'X')).toBe('1');
+    expect(evaluateMux2To1('0', '1', 'X')).toBe('X');
+
+    expect(evaluateDemux1To4('1', '0', '1')).toEqual({ Y0: '0', Y1: '0', Y2: '1', Y3: '0' });
+    expect(evaluateDemux1To4('Z', '1', '0')).toEqual({ Y0: '0', Y1: 'Z', Y2: '0', Y3: '0' });
+    expect(evaluateDemux1To4('1', 'X', '0')).toEqual({ Y0: 'X', Y1: 'X', Y2: 'X', Y3: 'X' });
+
+    expect(evaluateEncoder4To2('0', '0', '0', '0')).toEqual({ A0: '0', A1: '0', V: '0' });
+    expect(evaluateEncoder4To2('1', '1', '0', '0')).toEqual({ A0: '1', A1: '0', V: '1' });
+    expect(evaluateEncoder4To2('1', '0', '1', '1')).toEqual({ A0: '1', A1: '1', V: '1' });
+    expect(evaluateEncoder4To2('0', '0', '1', 'X')).toEqual({ A0: 'X', A1: 'X', V: 'X' });
+
+    expect(evaluateFullAdder('0', '0', '0')).toEqual({ SUM: '0', COUT: '0' });
+    expect(evaluateFullAdder('1', '1', '0')).toEqual({ SUM: '0', COUT: '1' });
+    expect(evaluateFullAdder('1', '1', '1')).toEqual({ SUM: '1', COUT: '1' });
+    expect(evaluateFullAdder('1', 'X', '0')).toEqual({ SUM: 'X', COUT: 'X' });
+
+    expect(evaluateParity4Bit('0', '0', '0', '0')).toEqual({ EVEN: '1', ODD: '0' });
+    expect(evaluateParity4Bit('1', '0', '1', '1')).toEqual({ EVEN: '0', ODD: '1' });
+    expect(evaluateParity4Bit('1', 'X', '0', '0')).toEqual({ EVEN: 'X', ODD: 'X' });
+  });
+
+  it('simulates D_LATCH, MUX_2TO1, DEMUX_1TO4, ENCODER_4TO2, FULL_ADDER, and PARITY_4BIT end-to-end', () => {
+    const swD = createNodeFromCatalog('INPUT_SWITCH', 'n_d', { x: 0, y: 0 }, 'D');
+    const swEn = createNodeFromCatalog('INPUT_SWITCH', 'n_en', { x: 0, y: 60 }, 'EN');
+    const latch = createNodeFromCatalog('D_LATCH', 'n_lat', { x: 160, y: 20 }, 'LAT');
+
+    const latchSim = new CircuitSimulator({
+      nodes: [swD, swEn, latch],
+      edges: [
+        {
+          id: 'le1',
+          sourceNodeId: 'n_d',
+          sourcePinId: 'OUT',
+          targetNodeId: 'n_lat',
+          targetPinId: 'D',
+          signalState: '0',
+        },
+        {
+          id: 'le2',
+          sourceNodeId: 'n_en',
+          sourcePinId: 'OUT',
+          targetNodeId: 'n_lat',
+          targetPinId: 'EN',
+          signalState: '0',
+        },
+      ],
+    });
+    latchSim.setInputState('n_en', '1');
+    latchSim.setInputState('n_d', '1');
+    let snap = latchSim.advanceBy(60);
+    expect(snap.nodePinStates.n_lat.Q).toBe('1');
+    expect(snap.nodePinStates.n_lat.NQ).toBe('0');
+
+    // Disable EN -> transparent latch must hold previous Q='1' even when D changes to '0'
+    latchSim.setInputState('n_en', '0');
+    latchSim.advanceBy(30);
+    latchSim.setInputState('n_d', '0');
+    snap = latchSim.advanceBy(60);
+    expect(snap.nodePinStates.n_lat.Q).toBe('1');
+    expect(snap.nodePinStates.n_lat.NQ).toBe('0');
+
+    // Full Adder + Parity + MUX + DEMUX + Encoder combinational integration
+    const a = createNodeFromCatalog('CONST_HIGH', 'fa_a', { x: 0, y: 0 }, 'A');
+    const b = createNodeFromCatalog('CONST_HIGH', 'fa_b', { x: 0, y: 60 }, 'B');
+    const cin = createNodeFromCatalog('CONST_HIGH', 'fa_c', { x: 0, y: 120 }, 'CIN');
+    const fa = createNodeFromCatalog('FULL_ADDER', 'fa_ic', { x: 160, y: 40 }, 'FA');
+    const parity = createNodeFromCatalog('PARITY_4BIT', 'par_ic', { x: 360, y: 40 }, 'PAR');
+    const mux = createNodeFromCatalog('MUX_2TO1', 'mux_ic', { x: 560, y: 40 }, 'MUX');
+    const demux = createNodeFromCatalog('DEMUX_1TO4', 'dmux_ic', { x: 560, y: 180 }, 'DMUX');
+    const enc = createNodeFromCatalog('ENCODER_4TO2', 'enc_ic', { x: 760, y: 180 }, 'ENC');
+
+    const msiDoc = {
+      metadata: {
+        schemaVersion: '1.0.0' as const,
+        title: 'MSI Combinational Integration',
+        description: 'Full Adder + Parity + MUX + DEMUX + Encoder',
+        category: 'Комбінаційні схеми',
+        tags: ['msi', 'test'],
+        createdAt: '2026-11-23T12:00:00.000Z',
+        updatedAt: '2026-11-23T12:00:00.000Z',
+      },
+      viewport: { panX: 0, panY: 0, zoom: 1, gridSnap: true },
+      nodes: [a, b, cin, fa, parity, mux, demux, enc],
+      edges: [
+        {
+          id: 'm1',
+          sourceNodeId: 'fa_a',
+          sourcePinId: 'OUT',
+          targetNodeId: 'fa_ic',
+          targetPinId: 'A',
+          signalState: '1' as const,
+        },
+        {
+          id: 'm2',
+          sourceNodeId: 'fa_b',
+          sourcePinId: 'OUT',
+          targetNodeId: 'fa_ic',
+          targetPinId: 'B',
+          signalState: '1' as const,
+        },
+        {
+          id: 'm3',
+          sourceNodeId: 'fa_c',
+          sourcePinId: 'OUT',
+          targetNodeId: 'fa_ic',
+          targetPinId: 'CIN',
+          signalState: '1' as const,
+        },
+        // Feed SUM=1, COUT=1, A=1 -> 3 ones into parity -> ODD=1, EVEN=0
+        {
+          id: 'm4',
+          sourceNodeId: 'fa_ic',
+          sourcePinId: 'SUM',
+          targetNodeId: 'par_ic',
+          targetPinId: 'D0',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm5',
+          sourceNodeId: 'fa_ic',
+          sourcePinId: 'COUT',
+          targetNodeId: 'par_ic',
+          targetPinId: 'D1',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm6',
+          sourceNodeId: 'fa_a',
+          sourcePinId: 'OUT',
+          targetNodeId: 'par_ic',
+          targetPinId: 'D2',
+          signalState: '1' as const,
+        },
+        // MUX selects D1 (EVEN=0) or D0 (ODD=1) via S=fa_ic.SUM (1) -> Y=0
+        {
+          id: 'm7',
+          sourceNodeId: 'par_ic',
+          sourcePinId: 'ODD',
+          targetNodeId: 'mux_ic',
+          targetPinId: 'D0',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm8',
+          sourceNodeId: 'par_ic',
+          sourcePinId: 'EVEN',
+          targetNodeId: 'mux_ic',
+          targetPinId: 'D1',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm9',
+          sourceNodeId: 'fa_ic',
+          sourcePinId: 'SUM',
+          targetNodeId: 'mux_ic',
+          targetPinId: 'S',
+          signalState: '0' as const,
+        },
+        // DEMUX routes D=fa_ic.COUT (1) with (S1=1, S0=0 -> idx 2) -> Y2=1 -> ENCODER D2 -> A1=1, A0=0, V=1
+        {
+          id: 'm10',
+          sourceNodeId: 'fa_ic',
+          sourcePinId: 'COUT',
+          targetNodeId: 'dmux_ic',
+          targetPinId: 'D',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm11',
+          sourceNodeId: 'fa_ic',
+          sourcePinId: 'COUT',
+          targetNodeId: 'dmux_ic',
+          targetPinId: 'S1',
+          signalState: '0' as const,
+        },
+        {
+          id: 'm12',
+          sourceNodeId: 'dmux_ic',
+          sourcePinId: 'Y2',
+          targetNodeId: 'enc_ic',
+          targetPinId: 'D2',
+          signalState: '0' as const,
+        },
+      ],
+    };
+
+    const msiSim = new CircuitSimulator(msiDoc);
+    const settled = msiSim.settleCombinational();
+    expect(settled.nodePinStates.fa_ic.SUM).toBe('1');
+    expect(settled.nodePinStates.fa_ic.COUT).toBe('1');
+    expect(settled.nodePinStates.par_ic.ODD).toBe('1');
+    expect(settled.nodePinStates.par_ic.EVEN).toBe('0');
+    expect(settled.nodePinStates.mux_ic.Y).toBe('0');
+    expect(settled.nodePinStates.dmux_ic.Y2).toBe('1');
+    expect(settled.nodePinStates.enc_ic).toMatchObject({ A0: '0', A1: '1', V: '1' });
+
+    const analysis = analyzeCircuitGraph(msiDoc);
+    expect(analysis.isCombinationalAcyclic).toBe(true);
+    expect(analysis.stronglyConnectedCycles).toEqual([]);
+    expect(analysis.criticalPathDelayNs).toBeGreaterThan(0);
+
+    const report = generateEngineeringReport(msiDoc);
+    expect(report.bom.some((b) => b.type === 'FULL_ADDER')).toBe(true);
+    expect(report.bom.some((b) => b.type === 'PARITY_4BIT')).toBe(true);
   });
 });

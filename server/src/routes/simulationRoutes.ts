@@ -7,56 +7,64 @@ import {
   synthesizeTruthTable,
   type CircuitDocument,
 } from '@logicforge/shared-types';
-import { z } from 'zod';
 import { getRepository } from '../repositories';
-import { asyncHandler } from '../utils/asyncHandler';
+import { asyncHandler, HttpError } from '../utils/asyncHandler';
 import { authenticateOptional, type AuthenticatedRequest } from '../utils/auth';
 import { simulateRequestSchema } from '../validation/schemas';
+import { parseOrThrow } from '../validation/validate';
 
 export const simulationRouter = Router();
+
+function parseSimulationPayload(body: unknown, errorMessage: string) {
+  const params = parseOrThrow(simulateRequestSchema, body, errorMessage);
+  const doc = stripUnsafeKeys(params.document) as CircuitDocument;
+  return { params, doc };
+}
 
 simulationRouter.post(
   '/run',
   authenticateOptional,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const parsed = simulateRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: 'Некоректні вхідні дані для симуляції',
-        details: z.flattenError(parsed.error),
-      });
-      return;
-    }
-
+    const { params, doc } = parseSimulationPayload(
+      req.body,
+      'Некоректні вхідні дані для симуляції',
+    );
     const repo = getRepository();
-    if (parsed.data.circuitId) {
-      const exists = await repo.getCircuitById(parsed.data.circuitId);
-      if (exists) {
-        if (!exists.isPublic && exists.authorId !== req.user?.sub && req.user?.role !== 'ADMIN') {
-          res.status(403).json({ error: 'Доступ до приватної схеми обмежено.' });
-          return;
+
+    let targetCircuitAuthorId: string | null = null;
+    if (params.circuitId) {
+      const existing = await repo.getCircuitById(params.circuitId);
+      if (existing) {
+        if (
+          !existing.isPublic &&
+          existing.authorId !== req.user?.sub &&
+          req.user?.role !== 'ADMIN'
+        ) {
+          throw new HttpError(403, 'Доступ до приватної схеми обмежено.');
         }
+        targetCircuitAuthorId = existing.authorId;
       }
     }
 
-    const doc = stripUnsafeKeys(parsed.data.document) as CircuitDocument;
     const timing = analyzeCircuitGraph(doc);
     const sim = new CircuitSimulator(doc);
-    const snapshot = sim.advanceBy(parsed.data.durationNs);
+    const snapshot = sim.advanceBy(params.durationNs);
     const waveforms = sim.getWaveformHistory();
 
-    if (parsed.data.circuitId) {
-      const exists = await repo.getCircuitById(parsed.data.circuitId);
-      if (exists) {
-        await repo.recordSimulationRun({
-          circuitId: parsed.data.circuitId,
-          executedById: req.user?.sub,
-          durationSimNs: parsed.data.durationNs,
-          processedEvents: snapshot.processedEventsCount,
-          criticalPathNs: timing.criticalPathDelayNs,
-          status: snapshot.status,
-        });
-      }
+    if (
+      params.circuitId &&
+      targetCircuitAuthorId &&
+      req.user &&
+      (targetCircuitAuthorId === req.user.sub || req.user.role === 'ADMIN')
+    ) {
+      await repo.recordSimulationRun({
+        circuitId: params.circuitId,
+        executedById: req.user.sub,
+        durationSimNs: params.durationNs,
+        processedEvents: snapshot.processedEventsCount,
+        criticalPathNs: timing.criticalPathDelayNs,
+        status: snapshot.status,
+      });
     }
 
     res.json({
@@ -68,31 +76,13 @@ simulationRouter.post(
 );
 
 simulationRouter.post('/analyze', (req, res) => {
-  const parsed = simulateRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Помилка валідації схеми для аналізу',
-      details: z.flattenError(parsed.error),
-    });
-    return;
-  }
-
-  const doc = stripUnsafeKeys(parsed.data.document) as CircuitDocument;
+  const { doc } = parseSimulationPayload(req.body, 'Помилка валідації схеми для аналізу');
   const report = generateEngineeringReport(doc);
   res.json({ report });
 });
 
 simulationRouter.post('/truth-table', (req, res) => {
-  const parsed = simulateRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Некоректні дані схеми',
-      details: z.flattenError(parsed.error),
-    });
-    return;
-  }
-
-  const doc = stripUnsafeKeys(parsed.data.document) as CircuitDocument;
-  const truthTable = synthesizeTruthTable(doc, parsed.data.maxTruthTableInputs);
+  const { params, doc } = parseSimulationPayload(req.body, 'Некоректні дані схеми');
+  const truthTable = synthesizeTruthTable(doc, params.maxTruthTableInputs);
   res.json({ truthTable });
 });

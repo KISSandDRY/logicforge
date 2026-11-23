@@ -6,9 +6,8 @@ import {
   type CircuitEdgeData,
   type CircuitNodeData,
 } from '@logicforge/shared-types';
-import { z } from 'zod';
 import { getRepository } from '../repositories';
-import { asyncHandler, HttpError } from '../utils/asyncHandler';
+import { asyncHandler } from '../utils/asyncHandler';
 import {
   authenticateOptional,
   authenticateRequired,
@@ -19,8 +18,19 @@ import {
   idParamSchema,
   updateCustomIcRequestSchema,
 } from '../validation/schemas';
+import { parseOrThrow } from '../validation/validate';
 
 export const componentRouter = Router();
+
+function sanitizeInternalCircuit(raw: { nodes: unknown[]; edges: unknown[] }): {
+  nodes: CircuitNodeData[];
+  edges: CircuitEdgeData[];
+} {
+  return {
+    nodes: stripUnsafeKeys(raw.nodes) as CircuitNodeData[],
+    edges: stripUnsafeKeys(raw.edges) as CircuitEdgeData[],
+  };
+}
 
 componentRouter.get('/catalog', (_req, res) => {
   res.json({
@@ -43,31 +53,25 @@ componentRouter.post(
   '/custom',
   authenticateRequired,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const parsed = createCustomIcRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: 'Некоректна специфікація користувацької ІМС',
-        details: z.flattenError(parsed.error),
-      });
-      return;
-    }
+    const data = parseOrThrow(
+      createCustomIcRequestSchema,
+      req.body,
+      'Некоректна специфікація користувацької ІМС',
+    );
 
     const repo = getRepository();
     const created = await repo.createCustomComponent(
       req.user!.sub,
       {
-        name: parsed.data.name,
-        code: parsed.data.code,
-        description: parsed.data.description,
-        propagationDelayNs: parsed.data.propagationDelayNs,
-        inputPins: parsed.data.inputPins,
-        outputPins: parsed.data.outputPins,
-        internalCircuit: {
-          nodes: stripUnsafeKeys(parsed.data.internalCircuit.nodes) as CircuitNodeData[],
-          edges: stripUnsafeKeys(parsed.data.internalCircuit.edges) as CircuitEdgeData[],
-        },
+        name: data.name,
+        code: data.code,
+        description: data.description,
+        propagationDelayNs: data.propagationDelayNs,
+        inputPins: data.inputPins,
+        outputPins: data.outputPins,
+        internalCircuit: sanitizeInternalCircuit(data.internalCircuit),
       },
-      parsed.data.isShared,
+      data.isShared,
     );
 
     res.status(201).json({ customComponent: created });
@@ -78,28 +82,23 @@ componentRouter.put(
   '/custom/:id',
   authenticateRequired,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const parsedId = idParamSchema.safeParse(req.params.id);
-    if (!parsedId.success) {
-      throw new HttpError(400, 'Некоректний ідентифікатор мікросхеми.');
-    }
-
-    const parsed = updateCustomIcRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: 'Некоректні параметри для оновлення користувацької ІМС',
-        details: z.flattenError(parsed.error),
-      });
-      return;
-    }
+    const id = parseOrThrow(
+      idParamSchema,
+      req.params.id,
+      'Некоректний ідентифікатор мікросхеми.',
+      false,
+    );
+    const data = parseOrThrow(
+      updateCustomIcRequestSchema,
+      req.body,
+      'Некоректні параметри для оновлення користувацької ІМС',
+    );
 
     const repo = getRepository();
-    const updated = await repo.updateCustomComponent(parsedId.data, req.user!.sub, {
-      ...parsed.data,
-      internalCircuit: parsed.data.internalCircuit
-        ? {
-            nodes: stripUnsafeKeys(parsed.data.internalCircuit.nodes) as CircuitNodeData[],
-            edges: stripUnsafeKeys(parsed.data.internalCircuit.edges) as CircuitEdgeData[],
-          }
+    const updated = await repo.updateCustomComponent(id, req.user!.sub, {
+      ...data,
+      internalCircuit: data.internalCircuit
+        ? sanitizeInternalCircuit(data.internalCircuit)
         : undefined,
     });
 
@@ -116,13 +115,15 @@ componentRouter.delete(
   '/custom/:id',
   authenticateRequired,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const parsedId = idParamSchema.safeParse(req.params.id);
-    if (!parsedId.success) {
-      throw new HttpError(400, 'Некоректний ідентифікатор мікросхеми.');
-    }
+    const id = parseOrThrow(
+      idParamSchema,
+      req.params.id,
+      'Некоректний ідентифікатор мікросхеми.',
+      false,
+    );
 
     const repo = getRepository();
-    const ok = await repo.deleteCustomComponent(parsedId.data, req.user!.sub);
+    const ok = await repo.deleteCustomComponent(id, req.user!.sub);
     if (!ok) {
       res.status(404).json({ error: 'Користувацький компонент не знайдено або немає прав.' });
       return;

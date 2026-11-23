@@ -39,6 +39,15 @@ function resolveCorsOrigins(nodeEnv: string): string {
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
 
+export const DEMO_USER_CONFIG = {
+  id: 'u-demo-lpnu-001',
+  email: 'student@lpnu.ua',
+  username: 'lpnu_engineer',
+  fullName: 'Інженер-схемотехнік',
+  role: 'STUDENT' as const,
+  password: process.env.DEMO_USER_PASSWORD?.trim() || 'DemoPass123!',
+};
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv,

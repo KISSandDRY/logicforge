@@ -140,7 +140,13 @@ describe('LogicForge REST API Integration Tests (Supertest)', () => {
   it('returns component catalog and manages custom IC subcircuits', async () => {
     const catRes = await request(app).get('/api/components/catalog');
     expect(catRes.status).toBe(200);
-    expect(catRes.body.components).toHaveLength(32);
+    expect(catRes.body.components).toHaveLength(38);
+    expect(
+      catRes.body.components.some((item: { type: string }) => item.type === 'FULL_ADDER'),
+    ).toBe(true);
+    expect(
+      catRes.body.components.some((item: { type: string }) => item.type === 'PARITY_4BIT'),
+    ).toBe(true);
 
     const customList = await request(app).get('/api/components/custom');
     expect(customList.status).toBe(200);
@@ -398,5 +404,51 @@ describe('LogicForge REST API Integration Tests (Supertest)', () => {
       .post('/api/auth/login')
       .send({ email: 'a@b.ua', password: '123' });
     expect(throttled.status).toBe(429);
+
+    // 6. Auth cache headers, unknown-email timing defense, fail-closed ?mine=true,
+    // simulation run ownership guard, and owner deletion lifecycle
+    expect(loginCookieRes.headers['cache-control']).toBe('no-store');
+    expect(cookieMeRes.headers['cache-control']).toBe('no-store');
+
+    const unknownLogin = await request(app).post('/api/auth/login').send({
+      email: 'nobody-here@lpnu.ua',
+      password: 'WrongPassword123',
+    });
+    expect(unknownLogin.status).toBe(401);
+
+    const mineUnauth = await request(app).get('/api/circuits?mine=true');
+    expect(mineUnauth.status).toBe(200);
+    expect(mineUnauth.body.circuits).toEqual([]);
+
+    const reportBeforeRun = await request(app).get(`/api/circuits/${createdCircuitId}/report`);
+    const initialRunCount = reportBeforeRun.body.runs.length as number;
+
+    const foreignSimRun = await request(app)
+      .post('/api/simulate/run')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ circuitId: createdCircuitId, document: ownerDoc, durationNs: 100 });
+    expect(foreignSimRun.status).toBe(200);
+
+    const reportAfterRun = await request(app).get(`/api/circuits/${createdCircuitId}/report`);
+    expect(reportAfterRun.body.runs).toHaveLength(initialRunCount);
+
+    const invalidSim = await request(app).post('/api/simulate/run').send({ durationNs: 100 });
+    expect(invalidSim.status).toBe(400);
+
+    const badRevRestore = await request(app)
+      .post(`/api/circuits/${privId}/revisions/0/restore`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(badRevRestore.status).toBe(400);
+
+    const ownerDelRes = await request(app)
+      .delete(`/api/circuits/${privId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(ownerDelRes.status).toBe(200);
+    expect(ownerDelRes.body.deleted).toBe(true);
+
+    const afterDelGet = await request(app)
+      .get(`/api/circuits/${privId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(afterDelGet.status).toBe(404);
   });
 });

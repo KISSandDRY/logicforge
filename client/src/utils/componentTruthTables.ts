@@ -152,6 +152,20 @@ export function getComponentTruthTable(type: ComponentType): ComponentTruthTable
         ],
       };
 
+    case 'PARITY_4BIT':
+      return {
+        title: 'Таблиця істинності 4-бітного контролера парності (74HC280)',
+        inputHeaders: ['Кількість 1 у (D3..D0)'],
+        outputHeaders: ['EVEN (Парна)', 'ODD (Непарна)'],
+        rows: [
+          { inputs: ['0 одиниць (0000)'], outputs: ['1', '0'], mode: 'Парна кількість одиниць' },
+          { inputs: ['1 одиниця'], outputs: ['0', '1'], mode: 'Непарна кількість одиниць' },
+          { inputs: ['2 одиниці'], outputs: ['1', '0'], mode: 'Парна кількість одиниць' },
+          { inputs: ['3 одиниці'], outputs: ['0', '1'], mode: 'Непарна кількість одиниць' },
+          { inputs: ['4 одиниці (1111)'], outputs: ['1', '0'], mode: 'Парна кількість одиниць' },
+        ],
+      };
+
     case 'SR_LATCH':
       return {
         title: 'Таблиця переходів асинхронного SR-тригера (74HC279)',
@@ -166,6 +180,22 @@ export function getComponentTruthTable(type: ComponentType): ComponentTruthTable
             outputs: ['X', 'X'],
             mode: 'Заборонена комбінація (невизначеність)',
           },
+        ],
+      };
+
+    case 'D_LATCH':
+      return {
+        title: 'Таблиця переходів прозорої D-защіпки з дозволом EN (74HC75)',
+        inputHeaders: ['EN', 'D'],
+        outputHeaders: ['Q(t+1)', '!Q(t+1)'],
+        rows: [
+          {
+            inputs: ['0', 'X'],
+            outputs: ['Q(t)', '!Q(t)'],
+            mode: 'Режим фіксації (утримання защепленого біта)',
+          },
+          { inputs: ['1', '0'], outputs: ['0', '1'], mode: 'Прозорий режим: передача 0' },
+          { inputs: ['1', '1'], outputs: ['1', '0'], mode: 'Прозорий режим: передача 1' },
         ],
       };
 
@@ -327,6 +357,19 @@ export function getComponentTruthTable(type: ComponentType): ComponentTruthTable
         ],
       };
 
+    case 'MUX_2TO1':
+      return {
+        title: 'Таблиця істинності мультиплексора 2-в-1 (74HC157)',
+        inputHeaders: ['S', 'D1', 'D0'],
+        outputHeaders: ['Y'],
+        rows: [
+          { inputs: ['0', 'X', '0'], outputs: ['0'], mode: 'Обрано канал D0 (= 0)' },
+          { inputs: ['0', 'X', '1'], outputs: ['1'], mode: 'Обрано канал D0 (= 1)' },
+          { inputs: ['1', '0', 'X'], outputs: ['0'], mode: 'Обрано канал D1 (= 0)' },
+          { inputs: ['1', '1', 'X'], outputs: ['1'], mode: 'Обрано канал D1 (= 1)' },
+        ],
+      };
+
     case 'MUX_4TO1':
       return {
         title: 'Таблиця істинності мультиплексора 4-в-1 (74HC153)',
@@ -337,6 +380,19 @@ export function getComponentTruthTable(type: ComponentType): ComponentTruthTable
           { inputs: ['0', '1'], outputs: ['D1'], mode: 'Комутація каналу 1 (Y = D1)' },
           { inputs: ['1', '0'], outputs: ['D2'], mode: 'Комутація каналу 2 (Y = D2)' },
           { inputs: ['1', '1'], outputs: ['D3'], mode: 'Комутація каналу 3 (Y = D3)' },
+        ],
+      };
+
+    case 'DEMUX_1TO4':
+      return {
+        title: 'Таблиця істинності демультиплексора 1-в-4 (74HC139)',
+        inputHeaders: ['S1', 'S0', 'D'],
+        outputHeaders: ['Y0', 'Y1', 'Y2', 'Y3'],
+        rows: [
+          { inputs: ['0', '0', 'D'], outputs: ['D', '0', '0', '0'], mode: 'Маршрут на вихід Y0' },
+          { inputs: ['0', '1', 'D'], outputs: ['0', 'D', '0', '0'], mode: 'Маршрут на вихід Y1' },
+          { inputs: ['1', '0', 'D'], outputs: ['0', '0', 'D', '0'], mode: 'Маршрут на вихід Y2' },
+          { inputs: ['1', '1', 'D'], outputs: ['0', '0', '0', 'D'], mode: 'Маршрут на вихід Y3' },
         ],
       };
 
@@ -371,6 +427,41 @@ export function getComponentTruthTable(type: ComponentType): ComponentTruthTable
             outputs: ['0', '0', '0', '1'],
             mode: 'Вибір лінії 3 (адреса 11)',
           },
+        ],
+      };
+
+    case 'ENCODER_4TO2':
+      return {
+        title: 'Таблиця істинності пріоритетного шифратора 4-в-2 (74HC148)',
+        inputHeaders: ['D3', 'D2', 'D1', 'D0'],
+        outputHeaders: ['A1', 'A0', 'V'],
+        rows: [
+          { inputs: ['0', '0', '0', '0'], outputs: ['0', '0', '0'], mode: 'Немає активного входу' },
+          { inputs: ['0', '0', '0', '1'], outputs: ['0', '0', '1'], mode: 'Активний вхід D0 (00)' },
+          { inputs: ['0', '0', '1', 'X'], outputs: ['0', '1', '1'], mode: 'Пріоритет D1 (01)' },
+          { inputs: ['0', '1', 'X', 'X'], outputs: ['1', '0', '1'], mode: 'Пріоритет D2 (10)' },
+          {
+            inputs: ['1', 'X', 'X', 'X'],
+            outputs: ['1', '1', '1'],
+            mode: 'Найвищий пріоритет D3 (11)',
+          },
+        ],
+      };
+
+    case 'FULL_ADDER':
+      return {
+        title: 'Таблиця істинності однорозрядного повного суматора (74HC80)',
+        inputHeaders: ['A', 'B', 'CIN'],
+        outputHeaders: ['SUM', 'COUT'],
+        rows: [
+          { inputs: ['0', '0', '0'], outputs: ['0', '0'], mode: '0 + 0 + 0 = 0' },
+          { inputs: ['0', '0', '1'], outputs: ['1', '0'], mode: '0 + 0 + 1 = 1' },
+          { inputs: ['0', '1', '0'], outputs: ['1', '0'], mode: '0 + 1 + 0 = 1' },
+          { inputs: ['0', '1', '1'], outputs: ['0', '1'], mode: '0 + 1 + 1 = 10₂' },
+          { inputs: ['1', '0', '0'], outputs: ['1', '0'], mode: '1 + 0 + 0 = 1' },
+          { inputs: ['1', '0', '1'], outputs: ['0', '1'], mode: '1 + 0 + 1 = 10₂' },
+          { inputs: ['1', '1', '0'], outputs: ['0', '1'], mode: '1 + 1 + 0 = 10₂' },
+          { inputs: ['1', '1', '1'], outputs: ['1', '1'], mode: '1 + 1 + 1 = 11₂' },
         ],
       };
 

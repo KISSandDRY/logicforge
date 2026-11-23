@@ -29,6 +29,7 @@ import {
   computeVisibleWaveformTicks,
 } from '../components/circuit/WaveformPanel';
 import { BooleanSopFormula, MathFormula, MathVar } from '../components/ui/MathFormula';
+import { ComponentPaletteSidebar } from '../components/editor/ComponentPaletteSidebar';
 import { Navbar } from '../components/layout/Navbar';
 import { LogicBadge } from '../components/ui/LogicBadge';
 import { Modal } from '../components/ui/Modal';
@@ -164,9 +165,9 @@ describe('Oscilloscope Waveform Tick Layout (computeVisibleWaveformTicks)', () =
 });
 
 describe('Component Library Catalog & Truth Tables', () => {
-  it('returns valid non-empty truth table metadata for all 31 standard catalog elements', () => {
+  it('returns valid non-empty truth table metadata for all 37 standard catalog elements', () => {
     const standardItems = COMPONENT_CATALOG.filter((item) => item.type !== 'CUSTOM_IC');
-    expect(standardItems).toHaveLength(31);
+    expect(standardItems).toHaveLength(37);
 
     for (const item of standardItems) {
       const truth = getComponentTruthTable(item.type);
@@ -625,8 +626,11 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
     expect(html).toContain('4-розрядний АЛП');
     expect(html).toContain('Відкрити в редакторі →');
     expect(html).toContain('Схемотехнічний редактор');
-    expect(html).toContain('Бібліотека 31 ІМС');
+    expect(html).toContain('Бібліотека 37 ІМС');
     expect(html).toContain('Інженерні звіти та ДДНФ');
+    expect(html).toContain('data-testid="home-scheme-pane"');
+    expect(html).toContain('data-testid="home-info-pane"');
+    expect(html).toContain('lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]');
     expect(html).not.toContain('LOGICFORGE.EXE');
   });
 
@@ -948,5 +952,62 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
     );
     expect(routedEdges).toHaveLength(2);
     expect(routedEdges[0].route.points[1].x).not.toBe(routedEdges[1].route.points[1].x);
+  });
+
+  it('renders new digital components (D_LATCH, PARITY_4BIT, MUX_2TO1, DEMUX_1TO4, ENCODER_4TO2, FULL_ADDER), MathFormulas, Palette search, and EditorPage smoke UI', () => {
+    const newTypes = [
+      'PARITY_4BIT',
+      'D_LATCH',
+      'MUX_2TO1',
+      'DEMUX_1TO4',
+      'ENCODER_4TO2',
+      'FULL_ADDER',
+    ] as const;
+
+    for (const type of newTypes) {
+      const node = createNodeFromCatalog(type, `node_${type}`, { x: 80, y: 80 }, type);
+      const nodeSvg = renderToStaticMarkup(
+        <svg>
+          <CircuitNode
+            node={node}
+            pinStates={{}}
+            selected={false}
+            activeWiringPinKey={null}
+            onNodePointerDown={() => {}}
+            onPinClick={() => {}}
+          />
+        </svg>,
+      );
+      expect(nodeSvg).toContain(`data-node-id="node_${type}"`);
+
+      const formulaHtml = renderToStaticMarkup(<MathFormula type={type} />);
+      expect(formulaHtml.length).toBeGreaterThan(20);
+      expect(formulaHtml).not.toContain('\\overline');
+
+      const truth = getComponentTruthTable(type);
+      expect(truth.rows.length).toBeGreaterThanOrEqual(3);
+    }
+
+    const paletteHtml = renderToStaticMarkup(
+      <ComponentPaletteSidebar
+        formId="test-palette"
+        widthPx={260}
+        isMobileActive={true}
+        paletteSearch="74HC80"
+        onChangePaletteSearch={() => {}}
+        paletteCategory="ALL"
+        onChangePaletteCategory={() => {}}
+        customIcs={[]}
+        onStartPaletteDrag={() => {}}
+        onAddComponent={() => {}}
+        onClosePanel={() => {}}
+      />,
+    );
+    expect(paletteHtml).toContain('FA1');
+    expect(paletteHtml).not.toContain('MUX2');
+
+    const editorHtml = renderWithProviders(<EditorPage />, ['/editor']);
+    expect(editorHtml).toContain('data-testid="btn-toggle-maximize-workspace"');
+    expect(editorHtml).toContain('data-testid="canvas-zoom-reset"');
   });
 });

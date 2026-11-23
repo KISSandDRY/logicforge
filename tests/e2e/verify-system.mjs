@@ -276,6 +276,8 @@ async function run() {
       const quickStartHeadings = Array.from(document.querySelectorAll('h2')).map((h) => h.textContent?.trim());
       const waveWidths = Array.from(document.querySelectorAll('[data-testid="showcase-wave-svg"]'))
         .map((el) => Math.round(el.getBoundingClientRect().width));
+      const leftPane = document.querySelector('[data-testid="home-scheme-pane"]')?.getBoundingClientRect().width || 0;
+      const rightPane = document.querySelector('[data-testid="home-info-pane"]')?.getBoundingClientRect().width || 0;
       return {
         tabCount: tabs.length,
         hasStartPause: Boolean(document.querySelector('[data-testid="showcase-toggle-play"]')),
@@ -284,11 +286,16 @@ async function run() {
         hasOpenEditor: Boolean(document.querySelector('[data-testid="showcase-open-editor"]')),
         quickStartHeadings,
         waveWidths,
+        paneRatio: rightPane > 0 ? leftPane / rightPane : 0,
         hasRawUnderscoreMath: /\\b(t_pd|T_crit|f_max)\\b/.test(document.body.innerText),
         hasIeeeText: document.body.innerText.includes('IEEE'),
       };
     })()`);
     assert.equal(homeCheck.tabCount, 4);
+    assert.ok(
+      homeCheck.paneRatio >= 1.35 && homeCheck.paneRatio <= 1.65,
+      `Home showcase must use 60:40 split (~1.5), got ratio=${homeCheck.paneRatio.toFixed(2)}`,
+    );
     assert.ok(
       homeCheck.hasStartPause && homeCheck.hasStep && homeCheck.hasReset && homeCheck.hasOpenEditor,
     );
@@ -304,7 +311,7 @@ async function run() {
     );
     assert.equal(homeCheck.hasIeeeText, false, 'Redundant IEEE text must not appear on Home');
     assert.ok(homeCheck.quickStartHeadings.includes('Схемотехнічний редактор'));
-    assert.ok(homeCheck.quickStartHeadings.includes('Бібліотека 31 ІМС'));
+    assert.ok(homeCheck.quickStartHeadings.includes('Бібліотека 37 ІМС'));
     assert.ok(homeCheck.quickStartHeadings.includes('Інженерні звіти та ДДНФ'));
 
     const homeCanvasZoomCheck = await cdp.eval(`(() => {
@@ -385,7 +392,7 @@ async function run() {
       return { cardTables, cardButtonCount: specButtons.length, ledGrad, switchUsesCanvasUi, hasGuestCustomIcSection };
     })()`);
     assert.equal(libCheck.cardTables, 0);
-    assert.equal(libCheck.cardButtonCount, 31);
+    assert.equal(libCheck.cardButtonCount, 37);
     assert.equal(libCheck.ledGrad, true, 'LED radial gradient highlight missing on catalog cards');
     assert.equal(
       libCheck.switchUsesCanvasUi,

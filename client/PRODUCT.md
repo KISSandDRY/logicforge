@@ -25,7 +25,7 @@ Used during laboratory coursework, circuit debugging, and engineering specificat
 ## Capabilities and Constraints
 
 - Four-valued IEEE 1164 simulation engine (`0`, `1`, `Z`, `X`) with bus conflict detection (`BUS_CONFLICT`) and oscillation guards.
-- 31 built-in catalog components (logic gates, flip-flops, registers, counters, NE555 astable timer, 4-bit microprocessor ALU, 7-segment decoder) plus user-encapsulated `CUSTOM_IC` modules.
+- 37 built-in catalog components (logic gates, parity checker, latches & flip-flops, registers, counters, NE555 astable timer, mux/demux, encoder/decoder, full adder, 4-bit microprocessor ALU, 7-segment decoder) plus user-encapsulated `CUSTOM_IC` modules.
 - Seven verified preset circuits and full PostgreSQL / local workspace revision history.
 - All Ukrainian engineering terminology, `data-testid` attributes, and mathematical models must be preserved.
 
@@ -39,7 +39,7 @@ Used during laboratory coursework, circuit debugging, and engineering specificat
 
 - Live discrete-event simulator and graph analyzer in `@logicforge/shared-types`.
 - Seven complete preset schematics (`preset-ne555-jk`, `preset-full-adder`, `preset-counter-hex`, `preset-mp-alu`, `preset-tristate-bus`, `preset-shift-register`, `preset-decoder-comparator`).
-- 31 component truth tables and mathematical transfer formulas.
+- 37 component truth tables and mathematical transfer formulas.
 
 ## Product Principles
 

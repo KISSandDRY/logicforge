@@ -5,21 +5,22 @@ import {
   analyzeCircuitGraph,
   buildHalfAdderCustomIc,
 } from '@logicforge/shared-types';
+import { config, DEMO_USER_CONFIG } from '../src/config';
 
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const passwordHash = await bcrypt.hash('DemoPass123!', 12);
+  const passwordHash = await bcrypt.hash(DEMO_USER_CONFIG.password, config.bcryptCost);
 
   const demoUser = await prisma.user.upsert({
-    where: { email: 'student@lpnu.ua' },
+    where: { email: DEMO_USER_CONFIG.email },
     update: {},
     create: {
-      email: 'student@lpnu.ua',
-      username: 'lpnu_engineer',
+      email: DEMO_USER_CONFIG.email,
+      username: DEMO_USER_CONFIG.username,
       fullName: 'Студент Кафедри АСУ',
       passwordHash,
-      role: 'STUDENT',
+      role: DEMO_USER_CONFIG.role,
     },
   });
 

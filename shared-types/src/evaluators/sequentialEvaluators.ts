@@ -4,6 +4,7 @@ import type { NodeEvaluatorContext, NodeEvaluatorFn } from './types';
 
 export type SequentialComponentType =
   | 'SR_LATCH'
+  | 'D_LATCH'
   | 'D_FLIPFLOP'
   | 'JK_FLIPFLOP'
   | 'T_FLIPFLOP'
@@ -48,6 +49,18 @@ export const SEQUENTIAL_EVALUATORS: Record<SequentialComponentType, NodeEvaluato
       mem.q = '1';
     } else if (s === '0' && r === '1') {
       mem.q = '0';
+    }
+    return { Q: mem.q, NQ: complementaryOutput(mem.q) };
+  },
+
+  D_LATCH: (node, ctx) => {
+    const mem = ctx.getMemory(node.id);
+    const d = readGateInput(ctx, node.id, 'D');
+    const en = readGateInput(ctx, node.id, 'EN');
+    if (en === '1') {
+      mem.q = d;
+    } else if (en === 'X' && (d === 'X' || mem.q !== d)) {
+      mem.q = 'X';
     }
     return { Q: mem.q, NQ: complementaryOutput(mem.q) };
   },

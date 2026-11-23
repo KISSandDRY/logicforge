@@ -15,7 +15,7 @@ logicforge/
 ├── shared-types/            # Ядро симуляції, графові алгоритми, JSON-схеми та спільні DTO
 │   └── src/
 │       ├── types.ts         # Канонічний кортеж COMPONENT_TYPES та інтерфейси Nodes, Edges, PinOffsets
-│       ├── catalog.ts       # Бібліотека 31 стандартного елемента (із icCode та STANDARD_COMPONENT_CATALOG)
+│       ├── catalog.ts       # Бібліотека 37 стандартних елементів (із icCode та STANDARD_COMPONENT_CATALOG)
 │       ├── circuitSanitizer.ts # Zod-валідація JSON та захист від прототипного забруднення
 │       ├── evaluators/      # Типізований вичерпний реєстр NODE_EVALUATORS (combinational / sequential / MSI)
 │       ├── logicAlgebra.ts  # Чотиризначна тристабільна алгебра Кліні / IEEE 1164

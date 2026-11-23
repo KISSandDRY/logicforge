@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import { Router, type Response } from 'express';
 import type { UserDTO } from '@logicforge/shared-types';
-import { z } from 'zod';
-import { config } from '../config';
+import { config, DEMO_USER_CONFIG } from '../config';
 import { getRepository } from '../repositories';
 import type { StoredUserRecord } from '../repositories/types';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -16,8 +17,14 @@ import {
 } from '../utils/auth';
 import { logger } from '../utils/logger';
 import { loginSchema, registerSchema } from '../validation/schemas';
+import { parseOrThrow } from '../validation/validate';
 
 export const authRouter = Router();
+
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  crypto.randomBytes(24).toString('hex'),
+  config.bcryptCost,
+);
 
 function toPublicUserDto(record: StoredUserRecord): UserDTO {
   return {
@@ -30,86 +37,71 @@ function toPublicUserDto(record: StoredUserRecord): UserDTO {
   };
 }
 
+function issueAuthSession(res: Response, record: StoredUserRecord, statusCode = 200): void {
+  const token = signToken({
+    sub: record.id,
+    email: record.email,
+    username: record.username,
+    role: record.role,
+  });
+  setSessionCookie(res, token);
+  res.status(statusCode).json({ token, user: toPublicUserDto(record) });
+}
+
 authRouter.post(
   '/register',
   asyncHandler(async (req, res) => {
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: 'Помилка валідації реєстраційних даних',
-        details: z.flattenError(parsed.error),
-      });
-      return;
-    }
+    const data = parseOrThrow(registerSchema, req.body, 'Помилка валідації реєстраційних даних');
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const normalizedUsername = data.username.trim();
 
     const repo = getRepository();
-    const { email, username, fullName, password } = parsed.data;
-
-    const existingEmail = await repo.findUserByEmail(email);
-    if (existingEmail) {
+    if (await repo.findUserByEmail(normalizedEmail)) {
       res.status(409).json({ error: 'Користувач із таким email вже зареєстрований.' });
       return;
     }
 
-    const existingUsername = await repo.findUserByUsername(username);
-    if (existingUsername) {
+    if (await repo.findUserByUsername(normalizedUsername)) {
       res.status(409).json({ error: 'Це ім’я користувача вже зайняте.' });
       return;
     }
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await hashPassword(data.password);
     const created = await repo.createUser({
-      email,
-      username,
-      fullName,
+      email: normalizedEmail,
+      username: normalizedUsername,
+      fullName: data.fullName.trim(),
       passwordHash,
       role: 'STUDENT',
     });
 
-    const token = signToken({
-      sub: created.id,
-      email: created.email,
-      username: created.username,
-      role: created.role,
-    });
-
-    setSessionCookie(res, token);
     logger.info(`Зареєстровано нового користувача: ${created.email}`);
-    res.status(201).json({ token, user: toPublicUserDto(created) });
+    issueAuthSession(res, created, 201);
   }),
 );
 
 authRouter.post(
   '/login',
   asyncHandler(async (req, res) => {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Некоректні облікові дані.' });
-      return;
-    }
+    const data = parseOrThrow(loginSchema, req.body, 'Некоректні облікові дані.', false);
+    const normalizedEmail = data.email.trim().toLowerCase();
 
     const repo = getRepository();
-    const found = await repo.findUserByEmail(parsed.data.email);
+    const found = await repo.findUserByEmail(normalizedEmail);
     if (!found) {
+      // Вирівнюємо час виконання перевірки для запобігання email enumeration через timing attack
+      await verifyPassword(data.password, DUMMY_PASSWORD_HASH);
       res.status(401).json({ error: 'Невірний email або пароль.' });
       return;
     }
 
-    const valid = await verifyPassword(parsed.data.password, found.passwordHash);
+    const valid = await verifyPassword(data.password, found.passwordHash);
     if (!valid) {
       res.status(401).json({ error: 'Невірний email або пароль.' });
       return;
     }
 
-    const token = signToken({
-      sub: found.id,
-      email: found.email,
-      username: found.username,
-      role: found.role,
-    });
-
-    setSessionCookie(res, token);
-    res.json({ token, user: toPublicUserDto(found) });
+    issueAuthSession(res, found);
   }),
 );
 
@@ -127,26 +119,19 @@ authRouter.post(
     }
 
     const repo = getRepository();
-    let demo = await repo.findUserByEmail('student@lpnu.ua');
+    let demo = await repo.findUserByEmail(DEMO_USER_CONFIG.email);
     if (!demo) {
-      const passwordHash = await hashPassword('DemoPass123!');
+      const passwordHash = await hashPassword(DEMO_USER_CONFIG.password);
       demo = await repo.createUser({
-        email: 'student@lpnu.ua',
-        username: 'lpnu_engineer',
-        fullName: 'Інженер-схемотехнік',
+        email: DEMO_USER_CONFIG.email,
+        username: DEMO_USER_CONFIG.username,
+        fullName: DEMO_USER_CONFIG.fullName,
         passwordHash,
-        role: 'STUDENT',
+        role: DEMO_USER_CONFIG.role,
       });
     }
 
-    const token = signToken({
-      sub: demo.id,
-      email: demo.email,
-      username: demo.username,
-      role: demo.role,
-    });
-    setSessionCookie(res, token);
-    res.json({ token, user: toPublicUserDto(demo) });
+    issueAuthSession(res, demo);
   }),
 );
 

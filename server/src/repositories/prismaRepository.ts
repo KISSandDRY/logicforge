@@ -50,6 +50,115 @@ function parseCustomIcFromDb(raw: Prisma.JsonValue, id: string): CustomICDefinit
   };
 }
 
+function mapUserRecord(u: {
+  id: string;
+  email: string;
+  username: string;
+  fullName: string;
+  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN';
+  passwordHash: string;
+  createdAt: Date;
+}): StoredUserRecord {
+  return {
+    id: u.id,
+    email: u.email,
+    username: u.username,
+    fullName: u.fullName,
+    role: u.role,
+    passwordHash: u.passwordHash,
+    createdAt: u.createdAt.toISOString(),
+  };
+}
+
+function mapCircuitSummary(r: {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  isPublic: boolean;
+  tags: string[];
+  nodeCount: number;
+  edgeCount: number;
+  criticalPathNs: number;
+  maxClockMhz: number;
+  authorId: string;
+  author: { fullName: string };
+  createdAt: Date;
+  updatedAt: Date;
+}): CircuitSummaryDTO {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    category: r.category,
+    isPublic: r.isPublic,
+    tags: r.tags,
+    nodeCount: r.nodeCount,
+    edgeCount: r.edgeCount,
+    criticalPathNs: r.criticalPathNs,
+    maxClockMhz: r.maxClockMhz,
+    authorId: r.authorId,
+    authorName: r.author.fullName,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+function mapCircuitDetail(
+  r: Parameters<typeof mapCircuitSummary>[0] & { schemaJson: Prisma.JsonValue },
+): CircuitDetailDTO {
+  return {
+    ...mapCircuitSummary(r),
+    schemaJson: parseCircuitDocFromDb(r.schemaJson),
+  };
+}
+
+function mapRevisionDto(r: {
+  id: string;
+  circuitId: string;
+  versionNumber: number;
+  commitMessage: string;
+  nodeCount: number;
+  edgeCount: number;
+  createdBy: { fullName: string };
+  createdAt: Date;
+  schemaJson: Prisma.JsonValue;
+}): CircuitRevisionDTO {
+  return {
+    id: r.id,
+    circuitId: r.circuitId,
+    versionNumber: r.versionNumber,
+    commitMessage: r.commitMessage,
+    nodeCount: r.nodeCount,
+    edgeCount: r.edgeCount,
+    authorName: r.createdBy.fullName,
+    createdAt: r.createdAt.toISOString(),
+    schemaJson: parseCircuitDocFromDb(r.schemaJson),
+  };
+}
+
+function mapSimulationRun(r: {
+  id: string;
+  circuitId: string;
+  executedById: string | null;
+  durationSimNs: number;
+  processedEvents: number;
+  criticalPathNs: number;
+  status: SimulationRunRecord['status'];
+  createdAt: Date;
+}): SimulationRunRecord {
+  return {
+    id: r.id,
+    circuitId: r.circuitId,
+    executedById: r.executedById ?? undefined,
+    durationSimNs: r.durationSimNs,
+    processedEvents: r.processedEvents,
+    criticalPathNs: r.criticalPathNs,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
 export class PrismaRepository implements IStorageRepository {
   public readonly driverName = 'postgresql-prisma' as const;
   private readonly prisma: PrismaClient;
@@ -69,44 +178,17 @@ export class PrismaRepository implements IStorageRepository {
 
   public async findUserByEmail(email: string): Promise<StoredUserRecord | null> {
     const u = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!u) return null;
-    return {
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      fullName: u.fullName,
-      role: u.role,
-      passwordHash: u.passwordHash,
-      createdAt: u.createdAt.toISOString(),
-    };
+    return u ? mapUserRecord(u) : null;
   }
 
   public async findUserByUsername(username: string): Promise<StoredUserRecord | null> {
     const u = await this.prisma.user.findUnique({ where: { username } });
-    if (!u) return null;
-    return {
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      fullName: u.fullName,
-      role: u.role,
-      passwordHash: u.passwordHash,
-      createdAt: u.createdAt.toISOString(),
-    };
+    return u ? mapUserRecord(u) : null;
   }
 
   public async findUserById(id: string): Promise<StoredUserRecord | null> {
     const u = await this.prisma.user.findUnique({ where: { id } });
-    if (!u) return null;
-    return {
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      fullName: u.fullName,
-      role: u.role,
-      passwordHash: u.passwordHash,
-      createdAt: u.createdAt.toISOString(),
-    };
+    return u ? mapUserRecord(u) : null;
   }
 
   public async createUser(data: {
@@ -125,15 +207,7 @@ export class PrismaRepository implements IStorageRepository {
         role: data.role ?? 'STUDENT',
       },
     });
-    return {
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      fullName: u.fullName,
-      role: u.role,
-      passwordHash: u.passwordHash,
-      createdAt: u.createdAt.toISOString(),
-    };
+    return mapUserRecord(u);
   }
 
   public async listCircuits(filter?: {
@@ -163,22 +237,7 @@ export class PrismaRepository implements IStorageRepository {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return rows.map((r) => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      category: r.category,
-      isPublic: r.isPublic,
-      tags: r.tags,
-      nodeCount: r.nodeCount,
-      edgeCount: r.edgeCount,
-      criticalPathNs: r.criticalPathNs,
-      maxClockMhz: r.maxClockMhz,
-      authorId: r.authorId,
-      authorName: r.author.fullName,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-    }));
+    return rows.map(mapCircuitSummary);
   }
 
   public async getCircuitById(id: string): Promise<CircuitDetailDTO | null> {
@@ -186,24 +245,7 @@ export class PrismaRepository implements IStorageRepository {
       where: { id },
       include: { author: true },
     });
-    if (!r) return null;
-    return {
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      category: r.category,
-      isPublic: r.isPublic,
-      tags: r.tags,
-      nodeCount: r.nodeCount,
-      edgeCount: r.edgeCount,
-      criticalPathNs: r.criticalPathNs,
-      maxClockMhz: r.maxClockMhz,
-      authorId: r.authorId,
-      authorName: r.author.fullName,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-      schemaJson: parseCircuitDocFromDb(r.schemaJson),
-    };
+    return r ? mapCircuitDetail(r) : null;
   }
 
   public async createCircuit(input: CreateCircuitInput): Promise<CircuitDetailDTO> {
@@ -243,23 +285,7 @@ export class PrismaRepository implements IStorageRepository {
       return circuit;
     });
 
-    return {
-      id: created.id,
-      title: created.title,
-      description: created.description,
-      category: created.category,
-      isPublic: created.isPublic,
-      tags: created.tags,
-      nodeCount: created.nodeCount,
-      edgeCount: created.edgeCount,
-      criticalPathNs: created.criticalPathNs,
-      maxClockMhz: created.maxClockMhz,
-      authorId: created.authorId,
-      authorName: created.author.fullName,
-      createdAt: created.createdAt.toISOString(),
-      updatedAt: created.updatedAt.toISOString(),
-      schemaJson: parseCircuitDocFromDb(created.schemaJson),
-    };
+    return mapCircuitDetail(created);
   }
 
   public async updateCircuit(
@@ -310,25 +336,7 @@ export class PrismaRepository implements IStorageRepository {
       return nextCircuit;
     });
 
-    if (!updated) return null;
-
-    return {
-      id: updated.id,
-      title: updated.title,
-      description: updated.description,
-      category: updated.category,
-      isPublic: updated.isPublic,
-      tags: updated.tags,
-      nodeCount: updated.nodeCount,
-      edgeCount: updated.edgeCount,
-      criticalPathNs: updated.criticalPathNs,
-      maxClockMhz: updated.maxClockMhz,
-      authorId: updated.authorId,
-      authorName: updated.author.fullName,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-      schemaJson: parseCircuitDocFromDb(updated.schemaJson),
-    };
+    return updated ? mapCircuitDetail(updated) : null;
   }
 
   public async deleteCircuit(id: string): Promise<boolean> {
@@ -346,17 +354,7 @@ export class PrismaRepository implements IStorageRepository {
       include: { createdBy: true },
       orderBy: { versionNumber: 'desc' },
     });
-    return revs.map((r) => ({
-      id: r.id,
-      circuitId: r.circuitId,
-      versionNumber: r.versionNumber,
-      commitMessage: r.commitMessage,
-      nodeCount: r.nodeCount,
-      edgeCount: r.edgeCount,
-      authorName: r.createdBy.fullName,
-      createdAt: r.createdAt.toISOString(),
-      schemaJson: parseCircuitDocFromDb(r.schemaJson),
-    }));
+    return revs.map(mapRevisionDto);
   }
 
   public async getRevision(
@@ -367,18 +365,7 @@ export class PrismaRepository implements IStorageRepository {
       where: { circuitId_versionNumber: { circuitId, versionNumber } },
       include: { createdBy: true },
     });
-    if (!r) return null;
-    return {
-      id: r.id,
-      circuitId: r.circuitId,
-      versionNumber: r.versionNumber,
-      commitMessage: r.commitMessage,
-      nodeCount: r.nodeCount,
-      edgeCount: r.edgeCount,
-      authorName: r.createdBy.fullName,
-      createdAt: r.createdAt.toISOString(),
-      schemaJson: parseCircuitDocFromDb(r.schemaJson),
-    };
+    return r ? mapRevisionDto(r) : null;
   }
 
   public async restoreRevision(
@@ -493,16 +480,7 @@ export class PrismaRepository implements IStorageRepository {
         status: input.status,
       },
     });
-    return {
-      id: created.id,
-      circuitId: created.circuitId,
-      executedById: created.executedById ?? undefined,
-      durationSimNs: created.durationSimNs,
-      processedEvents: created.processedEvents,
-      criticalPathNs: created.criticalPathNs,
-      status: created.status,
-      createdAt: created.createdAt.toISOString(),
-    };
+    return mapSimulationRun(created);
   }
 
   public async listSimulationRuns(circuitId: string): Promise<SimulationRunRecord[]> {
@@ -511,15 +489,6 @@ export class PrismaRepository implements IStorageRepository {
       orderBy: { createdAt: 'desc' },
       take: 25,
     });
-    return rows.map((r) => ({
-      id: r.id,
-      circuitId: r.circuitId,
-      executedById: r.executedById ?? undefined,
-      durationSimNs: r.durationSimNs,
-      processedEvents: r.processedEvents,
-      criticalPathNs: r.criticalPathNs,
-      status: r.status,
-      createdAt: r.createdAt.toISOString(),
-    }));
+    return rows.map(mapSimulationRun);
   }
 }
