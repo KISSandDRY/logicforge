@@ -4,6 +4,7 @@ export * from './circuitSanitizer';
 export * from './logicAlgebra';
 export * from './minHeap';
 export * from './graphAnalysis';
+export * from './evaluators';
 export * from './simulator';
 export * from './analyzer';
 export * from './presets';

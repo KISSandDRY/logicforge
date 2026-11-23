@@ -1,7 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Lock, Unlock, ZoomIn, ZoomOut } from 'lucide-react';
 import type { LogicState, WaveformSample } from '@logicforge/shared-types';
+import { usePinchWheelZoom } from '../../hooks/usePinchWheelZoom';
 import { LogicBadge } from '../ui/LogicBadge';
+
+const clampWaveZoom = (z: number) => Math.min(6, Math.max(0.5, Number(z.toFixed(2))));
 
 interface WaveformPanelProps {
   samples: WaveformSample[];
@@ -233,15 +236,12 @@ export const WaveformPanel: React.FC<WaveformPanelProps> = ({
   const zoomAnchorRef = useRef<{ ratio: number; clientOffsetX: number } | null>(null);
   const timeZoomRef = useRef(timeZoom);
   timeZoomRef.current = timeZoom;
+  const wavePinchRef = useRef<{ startDist: number; baseZoom: number } | null>(null);
 
-  useEffect(() => {
-    if (compact || isEmpty) return;
-    const el = viewportRef.current;
-    if (!el) return;
-
-    const clampWaveZoom = (z: number) => Math.min(6, Math.max(0.5, Number(z.toFixed(2))));
-
-    const handleWheel = (e: WheelEvent) => {
+  usePinchWheelZoom({
+    targetRef: viewportRef,
+    active: !compact && !isEmpty,
+    onWheel: (e, el) => {
       if (e.shiftKey) {
         if (el.scrollWidth > el.clientWidth) {
           e.preventDefault();
@@ -266,77 +266,29 @@ export const WaveformPanel: React.FC<WaveformPanelProps> = ({
             : 0.8;
         setTimeZoom((prev) => clampWaveZoom(prev * factor));
       }
-    };
-
-    let pinchStartDist = 0;
-    let pinchBaseZoom = 1;
-    const getPinch = (touches: TouchList) => {
-      const t0 = touches[0];
-      const t1 = touches[1];
-      return {
-        dist: Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY),
-        midX: (t0.clientX + t1.clientX) / 2,
+    },
+    onPinchStart: ({ dist }) => {
+      wavePinchRef.current = { startDist: dist, baseZoom: timeZoomRef.current };
+    },
+    onPinchMove: ({ dist, midX }, el) => {
+      if (!wavePinchRef.current) {
+        wavePinchRef.current = { startDist: dist, baseZoom: timeZoomRef.current };
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(el.clientWidth, midX - rect.left));
+      zoomAnchorRef.current = {
+        ratio: (el.scrollLeft + relX) / Math.max(1, el.scrollWidth),
+        clientOffsetX: relX,
       };
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
-        e.preventDefault();
-        e.stopPropagation();
-        const { dist } = getPinch(e.touches);
-        pinchStartDist = Math.max(8, dist);
-        pinchBaseZoom = timeZoomRef.current;
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
-        e.preventDefault();
-        e.stopPropagation();
-        const { dist, midX } = getPinch(e.touches);
-        if (pinchStartDist <= 0) {
-          pinchStartDist = Math.max(8, dist);
-          pinchBaseZoom = timeZoomRef.current;
-          return;
-        }
-        const rect = el.getBoundingClientRect();
-        const relX = Math.max(0, Math.min(el.clientWidth, midX - rect.left));
-        zoomAnchorRef.current = {
-          ratio: (el.scrollLeft + relX) / Math.max(1, el.scrollWidth),
-          clientOffsetX: relX,
-        };
-        setTimeZoom(clampWaveZoom(pinchBaseZoom * (dist / pinchStartDist)));
-      }
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) {
-        pinchStartDist = 0;
-      }
-    };
-
-    const blockGesture = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    el.addEventListener('touchstart', handleTouchStart, { passive: false });
-    el.addEventListener('touchmove', handleTouchMove, { passive: false });
-    el.addEventListener('touchend', handleTouchEnd, { passive: true });
-    el.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-    el.addEventListener('gesturestart', blockGesture, { passive: false });
-    el.addEventListener('gesturechange', blockGesture, { passive: false });
-    return () => {
-      el.removeEventListener('wheel', handleWheel);
-      el.removeEventListener('touchstart', handleTouchStart);
-      el.removeEventListener('touchmove', handleTouchMove);
-      el.removeEventListener('touchend', handleTouchEnd);
-      el.removeEventListener('touchcancel', handleTouchEnd);
-      el.removeEventListener('gesturestart', blockGesture);
-      el.removeEventListener('gesturechange', blockGesture);
-    };
-  }, [compact, isEmpty]);
+      setTimeZoom(
+        clampWaveZoom(wavePinchRef.current.baseZoom * (dist / wavePinchRef.current.startDist)),
+      );
+    },
+    onPinchEnd: () => {
+      wavePinchRef.current = null;
+    },
+  });
 
   useLayoutEffect(() => {
     if (isEmpty) return;

@@ -3,8 +3,7 @@ import bcrypt from 'bcryptjs';
 import {
   PRESET_CIRCUITS,
   analyzeCircuitGraph,
-  createNodeFromCatalog,
-  type CustomICDefinition,
+  buildHalfAdderCustomIc,
 } from '@logicforge/shared-types';
 
 const prisma = new PrismaClient();
@@ -61,81 +60,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const halfA = createNodeFromCatalog('INPUT_SWITCH', 'ha_a', { x: 40, y: 40 }, 'A');
-  const halfB = createNodeFromCatalog('INPUT_SWITCH', 'ha_b', { x: 40, y: 120 }, 'B');
-  const halfXor = createNodeFromCatalog('XOR', 'ha_xor', { x: 200, y: 40 }, 'SUM_G');
-  const halfAnd = createNodeFromCatalog('AND', 'ha_and', { x: 200, y: 120 }, 'CARRY_G');
-  const halfOutS = createNodeFromCatalog('PROBE', 'ha_s', { x: 380, y: 45 }, 'S');
-  const halfOutC = createNodeFromCatalog('PROBE', 'ha_c', { x: 380, y: 125 }, 'C');
-
-  const halfAdderIc: CustomICDefinition = {
-    id: 'ic-half-adder',
-    name: 'Напівсуматор (Half Adder IC)',
-    code: 'HA_1BIT',
-    description: 'Інкапсульована ІМС однорозрядного напівсуматора (S = A XOR B, C = A AND B).',
-    propagationDelayNs: 14,
-    inputPins: [
-      { id: 'A', name: 'A', mappedNodeId: 'ha_a' },
-      { id: 'B', name: 'B', mappedNodeId: 'ha_b' },
-    ],
-    outputPins: [
-      { id: 'S', name: 'S', mappedNodeId: 'ha_s' },
-      { id: 'C', name: 'C', mappedNodeId: 'ha_c' },
-    ],
-    internalCircuit: {
-      nodes: [halfA, halfB, halfXor, halfAnd, halfOutS, halfOutC],
-      edges: [
-        {
-          id: 'h1',
-          sourceNodeId: 'ha_a',
-          sourcePinId: 'OUT',
-          targetNodeId: 'ha_xor',
-          targetPinId: 'A',
-          signalState: '0',
-        },
-        {
-          id: 'h2',
-          sourceNodeId: 'ha_b',
-          sourcePinId: 'OUT',
-          targetNodeId: 'ha_xor',
-          targetPinId: 'B',
-          signalState: '0',
-        },
-        {
-          id: 'h3',
-          sourceNodeId: 'ha_a',
-          sourcePinId: 'OUT',
-          targetNodeId: 'ha_and',
-          targetPinId: 'A',
-          signalState: '0',
-        },
-        {
-          id: 'h4',
-          sourceNodeId: 'ha_b',
-          sourcePinId: 'OUT',
-          targetNodeId: 'ha_and',
-          targetPinId: 'B',
-          signalState: '0',
-        },
-        {
-          id: 'h5',
-          sourceNodeId: 'ha_xor',
-          sourcePinId: 'Y',
-          targetNodeId: 'ha_s',
-          targetPinId: 'IN',
-          signalState: '0',
-        },
-        {
-          id: 'h6',
-          sourceNodeId: 'ha_and',
-          sourcePinId: 'Y',
-          targetNodeId: 'ha_c',
-          targetPinId: 'IN',
-          signalState: '0',
-        },
-      ],
-    },
-  };
+  const halfAdderIc = buildHalfAdderCustomIc();
 
   const existingIc = await prisma.customComponent.findFirst({
     where: { code: 'HA_1BIT', authorId: demoUser.id },

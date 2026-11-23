@@ -25,6 +25,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'INPUTS',
     description:
       'Інтерактивне джерело вхідного сигналу з підтримкою логічного нуля (0), одиниці (1) та високоімпедансного стану (High-Z).',
+    symbolVariant: 'discrete',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 1,
@@ -40,6 +41,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'BTN',
     category: 'INPUTS',
     description: 'Формувач короткочасного одиничного імпульсу при натисканні користувачем.',
+    symbolVariant: 'discrete',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 1,
@@ -56,6 +58,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'INPUTS',
     description:
       'Чотирисекційний тумблерний блок для одночасного завдання 4-бітного двійкового слова Q3..Q0 на шину даних.',
+    symbolVariant: 'discrete',
     defaultWidth: 128,
     defaultHeight: 112,
     defaultDelayNs: 1,
@@ -75,6 +78,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'INPUTS',
     description:
       'Генератор прямокутних синхроімпульсів із заданою частотою Гц та модельним напівперіодом у наносекундах.',
+    symbolVariant: 'discrete',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 0,
@@ -90,6 +94,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'VCC',
     category: 'INPUTS',
     description: 'Джерело постійного високого логічного рівня (1 / +5V).',
+    symbolVariant: 'discrete',
     defaultWidth: 96,
     defaultHeight: 48,
     defaultDelayNs: 0,
@@ -105,6 +110,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'GND',
     category: 'INPUTS',
     description: 'Шина спільного проводу / постійного низького логічного рівня (0 / 0V).',
+    symbolVariant: 'discrete',
     defaultWidth: 96,
     defaultHeight: 48,
     defaultDelayNs: 0,
@@ -121,6 +127,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'GATES',
     description:
       'Повторювач логічного сигналу для узгодження навантажувальної здатності ліній і формування фіксованої затримки.',
+    icCode: '74HC125',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 4,
@@ -138,6 +146,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'GATES',
     description:
       'Інвертор із гістерезисом вхідної характеристики для придушення завад і формування крутих фронтів імпульсів.',
+    icCode: '74HC14',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 6,
@@ -161,6 +171,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'GATES',
     description:
       'Логічна кон’юнкція у тристабільній алгебрі Кліні: вихід дорівнює 1 лише коли всі входи дорівнюють 1; нульовий вхід домінує над Z/X.',
+    icCode: '74HC08',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 10,
@@ -179,6 +191,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'GATES',
     description:
       'Логічна диз’юнкція: вихід дорівнює 1, якщо хоча б один вхід має рівень 1; одиничний вхід домінує над Z/X.',
+    icCode: '74HC32',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 10,
@@ -196,6 +210,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'NOT',
     category: 'GATES',
     description: 'Логічне заперечення: перетворює 0 у 1, 1 у 0, а невизначені входи Z/X у X.',
+    icCode: '74HC04',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 5,
@@ -218,6 +234,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'NAND',
     category: 'GATES',
     description: 'Універсальний базисний елемент Шеффера (інверсна кон’юнкція).',
+    icCode: '74HC00',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 8,
@@ -241,6 +259,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'NOR',
     category: 'GATES',
     description: 'Універсальний базисний елемент Пірса (інверсна диз’юнкція).',
+    icCode: '74HC02',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 8,
@@ -264,6 +284,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'XOR',
     category: 'GATES',
     description: 'Додавання за модулем 2: вихід дорівнює 1 при різних значеннях входів A та B.',
+    icCode: '74HC86',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 14,
@@ -281,6 +303,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     shortLabel: 'XNOR',
     category: 'GATES',
     description: 'Елемент рівнозначності: видає 1 при збігу логічних рівнів входів A та B.',
+    icCode: '74HC266',
+    symbolVariant: 'shaped-gate',
     defaultWidth: 112,
     defaultHeight: 64,
     defaultDelayNs: 14,
@@ -305,6 +329,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'GATES',
     description:
       'Шинний формувач із третім станом: при EN=1 передає вхід D на вихід Y, при EN=0 переводить вихід у стан High-Z (Z).',
+    icCode: '74HC244',
+    symbolVariant: 'dip-ic',
     defaultWidth: 128,
     defaultHeight: 64,
     defaultDelayNs: 7,
@@ -323,6 +349,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Бістабільна комірка пам’яті з входами встановлення S та скидання R. Комбінація S=1, R=1 є забороненою (стан X).',
+    icCode: '74HC279',
+    symbolVariant: 'dip-ic',
     defaultWidth: 128,
     defaultHeight: 80,
     defaultDelayNs: 16,
@@ -348,6 +376,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Динамічний D-тригер із записом за переднім фронтом синхроімпульсу CLK та асинхронним входом скидання CLR.',
+    icCode: '74HC74',
+    symbolVariant: 'dip-ic',
     defaultWidth: 144,
     defaultHeight: 96,
     defaultDelayNs: 20,
@@ -380,6 +410,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Універсальний тригер за переднім фронтом CLK: J=0,K=0 — збереження; J=0,K=1 — скидання; J=1,K=0 — встановлення; J=1,K=1 — інверсія (лічильний режим).',
+    icCode: '74HC112',
+    symbolVariant: 'dip-ic',
     defaultWidth: 144,
     defaultHeight: 112,
     defaultDelayNs: 22,
@@ -413,6 +445,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Лічильний тригер зі зміною стану за переднім фронтом CLK при T=1 та збереженням стану при T=0.',
+    icCode: '74HC73',
+    symbolVariant: 'dip-ic',
     defaultWidth: 144,
     defaultHeight: 96,
     defaultDelayNs: 20,
@@ -445,6 +479,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Синхронний 4-розрядний регістр паралельного запису з дозволом завантаження LOAD за фронтом CLK та скиданням CLR.',
+    icCode: '74HC173',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 176,
     defaultDelayNs: 22,
@@ -477,6 +513,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Послідовно-паралельний зсувний регістр: зсуває біт SER у розряди Q0→Q1→Q2→Q3 за переднім фронтом CLK.',
+    icCode: '74HC164',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 128,
     defaultDelayNs: 22,
@@ -505,6 +543,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'SEQUENTIAL',
     description:
       'Синхронний 4-розрядний двійковий лічильник (0..15) з дозволом рахунку EN, скиданням RST та виходом переносу CO.',
+    icCode: '74HC161',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 144,
     defaultDelayNs: 24,
@@ -534,6 +574,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Модель ІМС таймера 555 з компараторами порогів TRIG/THRES, входом скидання !RST та астабільним RC-генератором імпульсів.',
+    icCode: 'NE555P',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 128,
     defaultDelayNs: 25,
@@ -560,6 +602,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Комутує один із чотирьох інформаційних входів D0..D3 на вихід Y залежно від двійкового коду керування S1,S0.',
+    icCode: '74HC153',
+    symbolVariant: 'dip-ic',
     defaultWidth: 144,
     defaultHeight: 152,
     defaultDelayNs: 15,
@@ -582,6 +626,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Перетворює 2-бітну адресу A1,A0 на один активний вихід Y0..Y3 при сигналі дозволу EN=1.',
+    icCode: '74HC139',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 128,
     defaultDelayNs: 14,
@@ -604,6 +650,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Порівнює два 2-бітні беззнакові слова A=(A1,A0) та B=(B1,B0) і формує ознаки A>B (GT), A=B (EQ), A<B (LT).',
+    icCode: '74HC85',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 128,
     defaultDelayNs: 16,
@@ -626,6 +674,8 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Арифметико-логічний пристрій мікропроцесора: виконує ADD (00), SUB (01), AND (10), XOR (11) над 2-бітними/4-бітними операндами з прапорцями ZERO та CARRY.',
+    icCode: '74HC181',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 160,
     defaultDelayNs: 30,
@@ -652,6 +702,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'MICROPROCESSOR',
     description:
       'Ієрархічно інкапсульований модуль користувача, що виконує вкладену цифрову підсхему.',
+    symbolVariant: 'dip-ic',
     defaultWidth: 160,
     defaultHeight: 96,
     defaultDelayNs: 18,
@@ -670,6 +721,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'OUTPUTS',
     description:
       'Візуальний індикатор логічного рівня: світиться при подачі 1, сигналізує помилку при конфлікті X.',
+    symbolVariant: 'discrete',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 2,
@@ -686,6 +738,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'OUTPUTS',
     description:
       'Контрольна точка вимірювання тристабільного стану (0, 1, Z, X) із записом осцилограми в логічний аналізатор.',
+    symbolVariant: 'discrete',
     defaultWidth: 112,
     defaultHeight: 48,
     defaultDelayNs: 0,
@@ -702,6 +755,7 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     category: 'OUTPUTS',
     description:
       'Дешифрує 4-бітний двійковий код (B0..B3) у шістнадцятковий символ 0..F на 7-сегментній матриці.',
+    symbolVariant: 'discrete',
     defaultWidth: 144,
     defaultHeight: 128,
     defaultDelayNs: 4,
@@ -715,6 +769,10 @@ export const COMPONENT_CATALOG: ComponentCatalogItem[] = [
     ],
   },
 ];
+
+export const STANDARD_COMPONENT_CATALOG = COMPONENT_CATALOG.filter(
+  (item) => item.type !== 'CUSTOM_IC',
+);
 
 export function getCatalogItem(type: ComponentType): ComponentCatalogItem {
   const found = COMPONENT_CATALOG.find((item) => item.type === type);

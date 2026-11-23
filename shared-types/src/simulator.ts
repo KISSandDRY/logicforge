@@ -1,21 +1,10 @@
-import { analyzeCircuitGraph, extractElectricalNets, pinKey } from './graphAnalysis';
 import {
-  computeTimer555Intervals,
-  evaluateAluSlice,
-  evaluateComparator2Bit,
-  evaluateDecoder2To4,
-  evaluateMux4To1,
-  logicAnd,
-  logicBuffer,
-  logicNand,
-  logicNor,
-  logicNot,
-  logicOr,
-  logicTriStateBuffer,
-  logicXnor,
-  logicXor,
-  normalizeGateInput,
-} from './logicAlgebra';
+  NODE_EVALUATORS,
+  type InternalSequentialState,
+  type NodeEvaluatorContext,
+} from './evaluators';
+import { analyzeCircuitGraph, extractElectricalNets, pinKey } from './graphAnalysis';
+import { computeTimer555Intervals } from './logicAlgebra';
 import { MinHeap } from './minHeap';
 import type {
   CircuitDocument,
@@ -29,12 +18,14 @@ import type {
   WaveformSample,
 } from './types';
 
-interface InternalSequentialState {
-  q: LogicState;
-  prevClk: LogicState;
-  counterValue: number;
-  timerPhase: 'HIGH' | 'LOW';
-  nextTimerToggleNs: number;
+function createInitialSeqState(): InternalSequentialState {
+  return {
+    q: '0',
+    prevClk: '0',
+    counterValue: 0,
+    timerPhase: 'LOW',
+    nextTimerToggleNs: 0,
+  };
 }
 
 const MAX_EVENTS_PER_WINDOW = 2500;
@@ -712,343 +703,54 @@ export class CircuitSimulator {
     return this.pinStates.get(pinKey(nodeId, pinId)) ?? 'Z';
   }
 
-  private computeNodeOutputsImmediate(node: CircuitNodeData): Record<string, LogicState> {
-    const mem = this.seqMemory.get(node.id)!;
-
-    switch (node.type) {
-      case 'CONST_HIGH':
-        return { OUT: '1' };
-      case 'CONST_LOW':
-        return { OUT: '0' };
-      case 'INPUT_SWITCH':
-      case 'PUSH_BUTTON':
-        return { OUT: node.properties.switchState ?? '0' };
-      case 'DIP_SWITCH_4': {
-        const dip = node.properties.dipSwitchStates ?? ['0', '0', '0', '0'];
-        return {
-          Q0: dip[0] ?? '0',
-          Q1: dip[1] ?? '0',
-          Q2: dip[2] ?? '0',
-          Q3: dip[3] ?? '0',
-        };
+  private readonly evaluatorContext: NodeEvaluatorContext = {
+    getPin: (nodeId, pinId) => this.getPin(nodeId, pinId),
+    getMemory: (nodeId) => {
+      let mem = this.seqMemory.get(nodeId);
+      if (!mem) {
+        mem = createInitialSeqState();
+        this.seqMemory.set(nodeId, mem);
       }
-      case 'CLOCK':
-        return { OUT: this.getPin(node.id, 'OUT') === '1' ? '1' : '0' };
-      case 'BUFFER':
-        return { Y: logicBuffer(this.getPin(node.id, 'A')) };
-      case 'NOT':
-      case 'SCHMITT_INV':
-        return { Y: logicNot(this.getPin(node.id, 'A')) };
-      case 'AND':
-        return { Y: logicAnd([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'OR':
-        return { Y: logicOr([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'NAND':
-        return { Y: logicNand([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'NOR':
-        return { Y: logicNor([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'XOR':
-        return { Y: logicXor([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'XNOR':
-        return { Y: logicXnor([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
-      case 'TRI_BUFFER':
-        return { Y: logicTriStateBuffer(this.getPin(node.id, 'D'), this.getPin(node.id, 'EN')) };
+      return mem;
+    },
+    evaluateCustomIc: (node) => this.evaluateCustomIcNode(node),
+  };
 
-      case 'SR_LATCH': {
-        const s =
-          this.getPin(node.id, 'S') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'S'));
-        const r =
-          this.getPin(node.id, 'R') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'R'));
-        if (s === 'X' || r === 'X' || (s === '1' && r === '1')) {
-          mem.q = 'X';
-          return { Q: 'X', NQ: 'X' };
-        }
-        if (s === '1' && r === '0') {
-          mem.q = '1';
-        } else if (s === '0' && r === '1') {
-          mem.q = '0';
-        }
-        const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
-        return { Q: mem.q, NQ: nq };
+  private evaluateCustomIcNode(node: CircuitNodeData): Record<string, LogicState> {
+    const icDef = node.properties.customIcId
+      ? this.customIcMap.get(node.properties.customIcId)
+      : undefined;
+    if (!icDef || this.nestingDepth >= MAX_CUSTOM_IC_NESTING_DEPTH) {
+      const fallback: Record<string, LogicState> = {};
+      for (const p of node.pins) {
+        if (p.direction === 'OUTPUT') fallback[p.id] = 'X';
       }
-
-      case 'D_FLIPFLOP': {
-        const d =
-          this.getPin(node.id, 'D') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'D'));
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const clr =
-          this.getPin(node.id, 'CLR') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLR'));
-
-        if (clr === '1') {
-          mem.q = '0';
-        } else if (mem.prevClk === '0' && clk === '1') {
-          mem.q = d;
-        }
-        mem.prevClk = clk;
-        const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
-        return { Q: mem.q, NQ: nq };
-      }
-
-      case 'JK_FLIPFLOP': {
-        const j =
-          this.getPin(node.id, 'J') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'J'));
-        const k =
-          this.getPin(node.id, 'K') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'K'));
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const clr =
-          this.getPin(node.id, 'CLR') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLR'));
-
-        if (clr === '1') {
-          mem.q = '0';
-        } else if (mem.prevClk === '0' && clk === '1') {
-          if (j === 'X' || k === 'X') {
-            mem.q = 'X';
-          } else if (j === '0' && k === '1') {
-            mem.q = '0';
-          } else if (j === '1' && k === '0') {
-            mem.q = '1';
-          } else if (j === '1' && k === '1') {
-            mem.q = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
-          }
-        }
-        mem.prevClk = clk;
-        const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
-        return { Q: mem.q, NQ: nq };
-      }
-
-      case 'T_FLIPFLOP': {
-        const t =
-          this.getPin(node.id, 'T') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'T'));
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const clr =
-          this.getPin(node.id, 'CLR') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLR'));
-
-        if (clr === '1') {
-          mem.q = '0';
-        } else if (mem.prevClk === '0' && clk === '1') {
-          if (t === 'X') {
-            mem.q = 'X';
-          } else if (t === '1') {
-            mem.q = mem.q === '1' ? '0' : '1';
-          }
-        }
-        mem.prevClk = clk;
-        const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
-        return { Q: mem.q, NQ: nq };
-      }
-
-      case 'REGISTER_4BIT': {
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const loadRaw = this.getPin(node.id, 'LOAD');
-        const load = loadRaw === 'Z' ? '1' : normalizeGateInput(loadRaw);
-        const clr =
-          this.getPin(node.id, 'CLR') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLR'));
-
-        if (clr === '1') {
-          mem.counterValue = 0;
-        } else if (mem.prevClk === '0' && clk === '1' && load === '1') {
-          const d0 = this.getPin(node.id, 'D0') === '1' ? 1 : 0;
-          const d1 = this.getPin(node.id, 'D1') === '1' ? 2 : 0;
-          const d2 = this.getPin(node.id, 'D2') === '1' ? 4 : 0;
-          const d3 = this.getPin(node.id, 'D3') === '1' ? 8 : 0;
-          mem.counterValue = d0 | d1 | d2 | d3;
-        }
-        mem.prevClk = clk;
-        const v = mem.counterValue;
-        return {
-          Q0: (v & 1) !== 0 ? '1' : '0',
-          Q1: (v & 2) !== 0 ? '1' : '0',
-          Q2: (v & 4) !== 0 ? '1' : '0',
-          Q3: (v & 8) !== 0 ? '1' : '0',
-        };
-      }
-
-      case 'SHIFT_REG_SIPO': {
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const ser =
-          this.getPin(node.id, 'SER') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'SER'));
-        const clr =
-          this.getPin(node.id, 'CLR') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLR'));
-
-        if (clr === '1') {
-          mem.counterValue = 0;
-        } else if (mem.prevClk === '0' && clk === '1') {
-          const inBit = ser === '1' ? 1 : 0;
-          mem.counterValue = ((mem.counterValue << 1) | inBit) & 0x0f;
-        }
-        mem.prevClk = clk;
-        const v = mem.counterValue;
-        return {
-          Q0: (v & 1) !== 0 ? '1' : '0',
-          Q1: (v & 2) !== 0 ? '1' : '0',
-          Q2: (v & 4) !== 0 ? '1' : '0',
-          Q3: (v & 8) !== 0 ? '1' : '0',
-        };
-      }
-
-      case 'COUNTER_4BIT': {
-        const clk =
-          this.getPin(node.id, 'CLK') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'CLK'));
-        const enRaw = this.getPin(node.id, 'EN');
-        const en = enRaw === 'Z' ? '1' : normalizeGateInput(enRaw);
-        const rst =
-          this.getPin(node.id, 'RST') === 'Z'
-            ? '0'
-            : normalizeGateInput(this.getPin(node.id, 'RST'));
-
-        if (rst === '1') {
-          mem.counterValue = 0;
-        } else if (mem.prevClk === '0' && clk === '1' && en === '1') {
-          mem.counterValue = (mem.counterValue + 1) & 0x0f;
-        }
-        mem.prevClk = clk;
-        const v = mem.counterValue;
-        return {
-          Q0: (v & 1) !== 0 ? '1' : '0',
-          Q1: (v & 2) !== 0 ? '1' : '0',
-          Q2: (v & 4) !== 0 ? '1' : '0',
-          Q3: (v & 8) !== 0 ? '1' : '0',
-          CO: v === 15 && en === '1' ? '1' : '0',
-        };
-      }
-
-      case 'TIMER_555': {
-        const rstRaw = this.getPin(node.id, 'RESET');
-        const resetActive = rstRaw === '0'; // !RST активний нуль
-        if (resetActive) {
-          mem.q = '0';
-          mem.timerPhase = 'LOW';
-          return { OUT: '0', DISCH: '0' };
-        }
-
-        const trig = this.getPin(node.id, 'TRIG');
-        const thres = this.getPin(node.id, 'THRES');
-        if (trig === '0' && thres !== '1') {
-          mem.q = '1';
-          mem.timerPhase = 'HIGH';
-        } else if (thres === '1' && trig !== '0') {
-          mem.q = '0';
-          mem.timerPhase = 'LOW';
-        }
-        const out: LogicState = mem.q === '1' ? '1' : '0';
-        const disch: LogicState = out === '1' ? 'Z' : '0';
-        return { OUT: out, DISCH: disch };
-      }
-
-      case 'MUX_4TO1': {
-        const y = evaluateMux4To1(
-          [
-            this.getPin(node.id, 'D0'),
-            this.getPin(node.id, 'D1'),
-            this.getPin(node.id, 'D2'),
-            this.getPin(node.id, 'D3'),
-          ],
-          this.getPin(node.id, 'S0'),
-          this.getPin(node.id, 'S1'),
-        );
-        return { Y: y };
-      }
-
-      case 'DECODER_2TO4': {
-        return evaluateDecoder2To4(
-          this.getPin(node.id, 'A0'),
-          this.getPin(node.id, 'A1'),
-          this.getPin(node.id, 'EN'),
-        );
-      }
-
-      case 'COMPARATOR_2BIT': {
-        return evaluateComparator2Bit(
-          this.getPin(node.id, 'A0'),
-          this.getPin(node.id, 'A1'),
-          this.getPin(node.id, 'B0'),
-          this.getPin(node.id, 'B1'),
-        );
-      }
-
-      case 'ALU_4BIT': {
-        const res = evaluateAluSlice(
-          this.getPin(node.id, 'A0'),
-          this.getPin(node.id, 'A1'),
-          this.getPin(node.id, 'B0'),
-          this.getPin(node.id, 'B1'),
-          this.getPin(node.id, 'OP0'),
-          this.getPin(node.id, 'OP1'),
-        );
-        return {
-          F0: res.f0,
-          F1: res.f1,
-          CARRY: res.carry,
-          ZERO: res.zero,
-        };
-      }
-
-      case 'CUSTOM_IC': {
-        const icDef = node.properties.customIcId
-          ? this.customIcMap.get(node.properties.customIcId)
-          : undefined;
-        if (!icDef || this.nestingDepth >= MAX_CUSTOM_IC_NESTING_DEPTH) {
-          const fallback: Record<string, LogicState> = {};
-          for (const p of node.pins) {
-            if (p.direction === 'OUTPUT') fallback[p.id] = 'X';
-          }
-          return fallback;
-        }
-        const subSim = new CircuitSimulator(
-          {
-            nodes: icDef.internalCircuit.nodes,
-            edges: icDef.internalCircuit.edges,
-            customDefinitions: Array.from(this.customIcMap.values()).filter(
-              (d) => d.id !== icDef.id,
-            ),
-          },
-          { nestingDepth: this.nestingDepth + 1 },
-        );
-        for (const inMap of icDef.inputPins) {
-          const extVal = this.getPin(node.id, inMap.id);
-          subSim.setInputState(inMap.mappedNodeId, extVal === 'Z' ? '0' : extVal);
-        }
-        const subSnap = subSim.settleCombinational(300);
-        const result: Record<string, LogicState> = {};
-        for (const outMap of icDef.outputPins) {
-          const mappedPins = subSnap.nodePinStates[outMap.mappedNodeId] ?? {};
-          result[outMap.id] = mappedPins.IN ?? mappedPins.P ?? mappedPins.OUT ?? 'Z';
-        }
-        return result;
-      }
-
-      default:
-        return {};
+      return fallback;
     }
+
+    const subSim = new CircuitSimulator(
+      {
+        nodes: icDef.internalCircuit.nodes,
+        edges: icDef.internalCircuit.edges,
+        customDefinitions: Array.from(this.customIcMap.values()).filter((d) => d.id !== icDef.id),
+      },
+      { nestingDepth: this.nestingDepth + 1 },
+    );
+    for (const inMap of icDef.inputPins) {
+      const extVal = this.getPin(node.id, inMap.id);
+      subSim.setInputState(inMap.mappedNodeId, extVal === 'Z' ? '0' : extVal);
+    }
+    const subSnap = subSim.settleCombinational(300);
+    const result: Record<string, LogicState> = {};
+    for (const outMap of icDef.outputPins) {
+      const mappedPins = subSnap.nodePinStates[outMap.mappedNodeId] ?? {};
+      result[outMap.id] = mappedPins.IN ?? mappedPins.P ?? mappedPins.OUT ?? 'Z';
+    }
+    return result;
+  }
+
+  private computeNodeOutputsImmediate(node: CircuitNodeData): Record<string, LogicState> {
+    return NODE_EVALUATORS[node.type](node, this.evaluatorContext);
   }
 
   private evaluateNodeAndSchedule(node: CircuitNodeData): void {

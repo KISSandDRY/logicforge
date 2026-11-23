@@ -6,13 +6,7 @@ import { Modal } from '../ui/Modal';
 import { Win95Dropdown } from '../ui/Win95Dropdown';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
-const SCHEME_CATEGORIES = [
-  'Комбінаційні схеми',
-  'Тригери та лічильники',
-  'ІМС та генератори',
-  'Мікропроцесорні вузли',
-  'Користувацькі проєкти',
-] as const;
+import { getSchemeCategoryOptions } from '../../constants/schemeCategories';
 
 export interface NewSchemeModalProps {
   open: boolean;
@@ -204,10 +198,7 @@ export const NewSchemeModal: React.FC<NewSchemeModalProps> = ({ open, onClose, o
               ariaLabel="Категорія схеми"
               value={category}
               onChange={setCategory}
-              options={Array.from(new Set([...SCHEME_CATEGORIES, category])).map((cat) => ({
-                value: cat,
-                label: cat,
-              }))}
+              options={getSchemeCategoryOptions(category)}
               className="w-full"
             />
           </div>

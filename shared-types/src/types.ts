@@ -11,39 +11,42 @@ export type PinDirection = 'INPUT' | 'OUTPUT';
 
 export type ComponentCategory = 'INPUTS' | 'GATES' | 'SEQUENTIAL' | 'MICROPROCESSOR' | 'OUTPUTS';
 
-export type ComponentType =
-  | 'INPUT_SWITCH'
-  | 'PUSH_BUTTON'
-  | 'DIP_SWITCH_4'
-  | 'CLOCK'
-  | 'CONST_HIGH'
-  | 'CONST_LOW'
-  | 'BUFFER'
-  | 'SCHMITT_INV'
-  | 'AND'
-  | 'OR'
-  | 'NOT'
-  | 'NAND'
-  | 'NOR'
-  | 'XOR'
-  | 'XNOR'
-  | 'TRI_BUFFER'
-  | 'SR_LATCH'
-  | 'D_FLIPFLOP'
-  | 'JK_FLIPFLOP'
-  | 'T_FLIPFLOP'
-  | 'REGISTER_4BIT'
-  | 'SHIFT_REG_SIPO'
-  | 'COUNTER_4BIT'
-  | 'TIMER_555'
-  | 'MUX_4TO1'
-  | 'DECODER_2TO4'
-  | 'COMPARATOR_2BIT'
-  | 'ALU_4BIT'
-  | 'CUSTOM_IC'
-  | 'LED'
-  | 'PROBE'
-  | 'SEVEN_SEGMENT';
+export const COMPONENT_TYPES = [
+  'INPUT_SWITCH',
+  'PUSH_BUTTON',
+  'DIP_SWITCH_4',
+  'CLOCK',
+  'CONST_HIGH',
+  'CONST_LOW',
+  'BUFFER',
+  'SCHMITT_INV',
+  'AND',
+  'OR',
+  'NOT',
+  'NAND',
+  'NOR',
+  'XOR',
+  'XNOR',
+  'TRI_BUFFER',
+  'SR_LATCH',
+  'D_FLIPFLOP',
+  'JK_FLIPFLOP',
+  'T_FLIPFLOP',
+  'REGISTER_4BIT',
+  'SHIFT_REG_SIPO',
+  'COUNTER_4BIT',
+  'TIMER_555',
+  'MUX_4TO1',
+  'DECODER_2TO4',
+  'COMPARATOR_2BIT',
+  'ALU_4BIT',
+  'CUSTOM_IC',
+  'LED',
+  'PROBE',
+  'SEVEN_SEGMENT',
+] as const;
+
+export type ComponentType = (typeof COMPONENT_TYPES)[number];
 
 /**
  * Геометричне зміщення виводу (піна) відносно верхнього лівого кута корпусу елемента.
@@ -159,6 +162,8 @@ export interface ComponentCatalogItem {
   shortLabel: string;
   category: ComponentCategory;
   description: string;
+  icCode?: string;
+  symbolVariant?: 'shaped-gate' | 'dip-ic' | 'discrete';
   defaultWidth: number;
   defaultHeight: number;
   defaultDelayNs: number;

@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMPONENT_CATALOG,
+  COMPONENT_TYPES,
   CircuitSimulator,
   MinHeap,
+  NODE_EVALUATORS,
   PRESET_CIRCUITS,
+  STANDARD_COMPONENT_CATALOG,
   analyzeCircuitGraph,
   buildAddressDecoderComparatorPreset,
   buildCounterHexPreset,
   buildFullAdderPreset,
+  buildHalfAdderCustomIc,
   buildMicroprocessorAluPreset,
   buildShiftRegisterPreset,
   buildTimer555JkDividerPreset,
@@ -781,5 +785,75 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
     expect(safeParseUserDto('{"id":"1","email":"bad-email"}')).toBeNull();
     expect(safeParseCustomIcList('{bad')).toEqual([]);
     expect(safeParseCircuitSummaryList('{bad')).toEqual([]);
+  });
+
+  it('keeps NODE_EVALUATORS exhaustive over COMPONENT_TYPES, catalogs icCode metadata, and simulates buildHalfAdderCustomIc()', () => {
+    for (const type of COMPONENT_TYPES) {
+      expect(typeof NODE_EVALUATORS[type]).toBe('function');
+    }
+
+    expect(STANDARD_COMPONENT_CATALOG.length).toBe(COMPONENT_CATALOG.length - 1);
+    expect(STANDARD_COMPONENT_CATALOG.some((item) => item.type === 'CUSTOM_IC')).toBe(false);
+    expect(COMPONENT_CATALOG.find((item) => item.type === 'AND')?.icCode).toBe('74HC08');
+    expect(COMPONENT_CATALOG.find((item) => item.type === 'TIMER_555')?.icCode).toBe('NE555P');
+
+    const halfAdder = buildHalfAdderCustomIc();
+    const swA = createNodeFromCatalog('INPUT_SWITCH', 't_a', { x: 0, y: 0 }, 'A');
+    const swB = createNodeFromCatalog('INPUT_SWITCH', 't_b', { x: 0, y: 80 }, 'B');
+    const icNode = createNodeFromCatalog('CUSTOM_IC', 't_ha', { x: 160, y: 20 }, 'HA', halfAdder);
+    const ledS = createNodeFromCatalog('LED', 't_s', { x: 360, y: 0 }, 'S');
+    const ledC = createNodeFromCatalog('LED', 't_c', { x: 360, y: 80 }, 'C');
+
+    const sim = new CircuitSimulator({
+      nodes: [swA, swB, icNode, ledS, ledC],
+      edges: [
+        {
+          id: 'e1',
+          sourceNodeId: 't_a',
+          sourcePinId: 'OUT',
+          targetNodeId: 't_ha',
+          targetPinId: 'A',
+          signalState: '0',
+        },
+        {
+          id: 'e2',
+          sourceNodeId: 't_b',
+          sourcePinId: 'OUT',
+          targetNodeId: 't_ha',
+          targetPinId: 'B',
+          signalState: '0',
+        },
+        {
+          id: 'e3',
+          sourceNodeId: 't_ha',
+          sourcePinId: 'S',
+          targetNodeId: 't_s',
+          targetPinId: 'IN',
+          signalState: '0',
+        },
+        {
+          id: 'e4',
+          sourceNodeId: 't_ha',
+          sourcePinId: 'C',
+          targetNodeId: 't_c',
+          targetPinId: 'IN',
+          signalState: '0',
+        },
+      ],
+      customDefinitions: [halfAdder],
+    });
+
+    expect(sim.settleCombinational().nodePinStates.t_s.IN).toBe('0');
+    expect(sim.settleCombinational().nodePinStates.t_c.IN).toBe('0');
+
+    sim.setInputState('t_a', '1');
+    const oneZero = sim.settleCombinational();
+    expect(oneZero.nodePinStates.t_s.IN).toBe('1');
+    expect(oneZero.nodePinStates.t_c.IN).toBe('0');
+
+    sim.setInputState('t_b', '1');
+    const oneOne = sim.settleCombinational();
+    expect(oneOne.nodePinStates.t_s.IN).toBe('0');
+    expect(oneOne.nodePinStates.t_c.IN).toBe('1');
   });
 });

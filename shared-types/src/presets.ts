@@ -1,5 +1,10 @@
 import { createNodeFromCatalog } from './catalog';
-import type { CircuitDocument, CircuitEdgeData, CircuitNodeData } from './types';
+import type {
+  CircuitDocument,
+  CircuitEdgeData,
+  CircuitNodeData,
+  CustomICDefinition,
+} from './types';
 
 function edge(
   id: string,
@@ -389,3 +394,39 @@ export const PRESET_CIRCUITS: PresetCircuitTemplate[] = [
     document: buildAddressDecoderComparatorPreset(),
   },
 ];
+
+export function buildHalfAdderCustomIc(): CustomICDefinition {
+  const halfA = createNodeFromCatalog('INPUT_SWITCH', 'ha_a', { x: 40, y: 40 }, 'A');
+  const halfB = createNodeFromCatalog('INPUT_SWITCH', 'ha_b', { x: 40, y: 120 }, 'B');
+  const halfXor = createNodeFromCatalog('XOR', 'ha_xor', { x: 200, y: 40 }, 'SUM_G');
+  const halfAnd = createNodeFromCatalog('AND', 'ha_and', { x: 200, y: 120 }, 'CARRY_G');
+  const halfOutS = createNodeFromCatalog('PROBE', 'ha_s', { x: 380, y: 45 }, 'S');
+  const halfOutC = createNodeFromCatalog('PROBE', 'ha_c', { x: 380, y: 125 }, 'C');
+
+  return {
+    id: 'ic-half-adder',
+    name: 'Напівсуматор (Half Adder IC)',
+    code: 'HA_1BIT',
+    description: 'Інкапсульована ІМС однорозрядного напівсуматора (S = A XOR B, C = A AND B).',
+    propagationDelayNs: 14,
+    inputPins: [
+      { id: 'A', name: 'A', mappedNodeId: 'ha_a' },
+      { id: 'B', name: 'B', mappedNodeId: 'ha_b' },
+    ],
+    outputPins: [
+      { id: 'S', name: 'S', mappedNodeId: 'ha_s' },
+      { id: 'C', name: 'C', mappedNodeId: 'ha_c' },
+    ],
+    internalCircuit: {
+      nodes: [halfA, halfB, halfXor, halfAnd, halfOutS, halfOutC],
+      edges: [
+        edge('h1', 'ha_a', 'OUT', 'ha_xor', 'A'),
+        edge('h2', 'ha_b', 'OUT', 'ha_xor', 'B'),
+        edge('h3', 'ha_a', 'OUT', 'ha_and', 'A'),
+        edge('h4', 'ha_b', 'OUT', 'ha_and', 'B'),
+        edge('h5', 'ha_xor', 'Y', 'ha_s', 'IN'),
+        edge('h6', 'ha_and', 'Y', 'ha_c', 'IN'),
+      ],
+    },
+  };
+}

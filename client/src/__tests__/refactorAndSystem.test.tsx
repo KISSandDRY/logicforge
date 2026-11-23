@@ -6,6 +6,7 @@ import {
   COMPONENT_CATALOG,
   CircuitSimulator,
   PRESET_CIRCUITS,
+  STANDARD_COMPONENT_CATALOG,
   analyzeCircuitGraph,
   computeTimer555Intervals,
   createNodeFromCatalog,
@@ -14,6 +15,11 @@ import {
   synthesizeTruthTable,
 } from '@logicforge/shared-types';
 import { computeNetJunctions, computeWireRoute } from '../components/circuit/CircuitCanvas';
+import {
+  computeAlignmentGuides,
+  computeRoutedNets,
+  snapNodePosition,
+} from '../components/circuit/wireRouting';
 import { CircuitNode } from '../components/circuit/CircuitNode';
 import { NewSchemeModal } from '../components/circuit/NewSchemeModal';
 import { PropertyInspector } from '../components/circuit/PropertyInspector';
@@ -886,5 +892,57 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
         }),
       ),
     ).toThrow(CircuitImportValidationError);
+  });
+
+  it('separates parallel net corridors, computes magnetic snaps/guides, and keeps STANDARD_COMPONENT_CATALOG consistent', () => {
+    expect(STANDARD_COMPONENT_CATALOG.length).toBe(COMPONENT_CATALOG.length - 1);
+    expect(STANDARD_COMPONENT_CATALOG.every((item) => item.type !== 'CUSTOM_IC')).toBe(true);
+
+    const sw1 = createNodeFromCatalog('INPUT_SWITCH', 'w_sw1', { x: 40, y: 40 }, 'A');
+    const sw2 = createNodeFromCatalog('INPUT_SWITCH', 'w_sw2', { x: 40, y: 120 }, 'B');
+    const led1 = createNodeFromCatalog('LED', 'w_led1', { x: 260, y: 80 }, 'Y1');
+    const led2 = createNodeFromCatalog('LED', 'w_led2', { x: 260, y: 160 }, 'Y2');
+
+    // Magnetic snap aligns LED pin Y (offset 24) to switch output pin Y (40 + 24 = 64 => y=40)
+    const snapped = snapNodePosition(led1, 261, 44, [sw1, sw2, led1], [], true);
+    expect(snapped).toEqual({ x: 264, y: 40 });
+
+    const centerAlignedGuides = computeAlignmentGuides(
+      createNodeFromCatalog('LED', 'w_probe', { x: 42, y: 200 }, 'P'),
+      [sw1, sw2, led1],
+    );
+    expect(centerAlignedGuides.vertical).toBe(96);
+
+    const edgeAlignedGuides = computeAlignmentGuides(
+      createNodeFromCatalog('CONST_HIGH', 'w_vcc', { x: 42, y: 200 }, 'VCC'),
+      [sw1, sw2, led1],
+    );
+    expect(edgeAlignedGuides.vertical).toBe(40);
+
+    // Parallel nets crossing a shared corridor get distinct vertical midX coordinates
+    const { routedEdges } = computeRoutedNets(
+      [sw1, sw2, led1, led2],
+      [
+        {
+          id: 'pe1',
+          sourceNodeId: 'w_sw1',
+          sourcePinId: 'OUT',
+          targetNodeId: 'w_led1',
+          targetPinId: 'IN',
+          signalState: '1',
+        },
+        {
+          id: 'pe2',
+          sourceNodeId: 'w_sw2',
+          sourcePinId: 'OUT',
+          targetNodeId: 'w_led2',
+          targetPinId: 'IN',
+          signalState: '0',
+        },
+      ],
+      { pe1: '1', pe2: '0' },
+    );
+    expect(routedEdges).toHaveLength(2);
+    expect(routedEdges[0].route.points[1].x).not.toBe(routedEdges[1].route.points[1].x);
   });
 });

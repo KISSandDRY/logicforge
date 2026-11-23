@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { getCatalogItem, normalizeCircuitNodesWithCatalog } from './catalog';
-import type {
-  CircuitDocument,
-  CircuitSummaryDTO,
-  ComponentType,
-  CustomICDefinition,
-  UserDTO,
+import {
+  COMPONENT_TYPES,
+  type CircuitDocument,
+  type CircuitSummaryDTO,
+  type ComponentType,
+  type CustomICDefinition,
+  type UserDTO,
 } from './types';
 
 export const CIRCUIT_LIMITS = {
@@ -84,40 +85,7 @@ export function stripUnsafeKeys(value: unknown, depth = 0): unknown {
 
 export const logicStateSchema = z.enum(['0', '1', 'Z', 'X']);
 
-export const componentTypeSchema = z.enum([
-  'INPUT_SWITCH',
-  'PUSH_BUTTON',
-  'DIP_SWITCH_4',
-  'CLOCK',
-  'CONST_HIGH',
-  'CONST_LOW',
-  'BUFFER',
-  'SCHMITT_INV',
-  'AND',
-  'OR',
-  'NOT',
-  'NAND',
-  'NOR',
-  'XOR',
-  'XNOR',
-  'TRI_BUFFER',
-  'SR_LATCH',
-  'D_FLIPFLOP',
-  'JK_FLIPFLOP',
-  'T_FLIPFLOP',
-  'REGISTER_4BIT',
-  'SHIFT_REG_SIPO',
-  'COUNTER_4BIT',
-  'TIMER_555',
-  'MUX_4TO1',
-  'DECODER_2TO4',
-  'COMPARATOR_2BIT',
-  'ALU_4BIT',
-  'CUSTOM_IC',
-  'LED',
-  'PROBE',
-  'SEVEN_SEGMENT',
-]);
+export const componentTypeSchema = z.enum(COMPONENT_TYPES);
 
 export const pinOffsetSchema = z.object({
   x: z.number().finite(),

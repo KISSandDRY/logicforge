@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -12,21 +12,18 @@ import {
   SkipForward,
 } from 'lucide-react';
 import {
-  COMPONENT_CATALOG,
-  CircuitSimulator,
   PRESET_CIRCUITS,
+  STANDARD_COMPONENT_CATALOG,
   analyzeCircuitGraph,
   type CircuitDocument,
-  type CircuitNodeData,
   type LogicState,
-  type SimulationSnapshot,
-  type WaveformSample,
 } from '@logicforge/shared-types';
 import { CircuitCanvas } from '../components/circuit/CircuitCanvas';
 import { Button, getButtonClassName } from '../components/ui/Button';
 import { LogicBadge } from '../components/ui/LogicBadge';
 import { MathVar } from '../components/ui/MathFormula';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useSimulationPlayback } from '../hooks/useSimulationPlayback';
 
 const SHOWCASE_PRESETS = [
   {
@@ -68,18 +65,6 @@ export const DashboardPage: React.FC = () => {
     const found = PRESET_CIRCUITS.find((p) => p.id === 'preset-ne555-jk') ?? PRESET_CIRCUITS[0];
     return JSON.parse(JSON.stringify(found.document)) as CircuitDocument;
   });
-
-  const heroSimRef = useRef<CircuitSimulator>(new CircuitSimulator(heroDoc));
-  const heroDocRef = useRef<CircuitDocument>(heroDoc);
-  heroDocRef.current = heroDoc;
-  const vectorStepRef = useRef<number>(0);
-
-  const [heroSnap, setHeroSnap] = useState<SimulationSnapshot>(() =>
-    heroSimRef.current.advanceBy(200),
-  );
-  const [heroWaves, setHeroWaves] = useState<WaveformSample[]>(() => [
-    ...heroSimRef.current.getWaveformHistory(),
-  ]);
   const [heroSelectedNodeId, setHeroSelectedNodeId] = useState<string | null>('n_555');
   const [heroDraggingNodePos, setHeroDraggingNodePos] = useState<{
     nodeId: string;
@@ -104,17 +89,31 @@ export const DashboardPage: React.FC = () => {
     return () => mq.removeEventListener?.('change', onMotionPrefChange);
   }, []);
 
+  const {
+    snapshot: heroSnap,
+    waveforms: heroWaves,
+    loadIntoSimulator,
+    advanceSimulationTick,
+    handleToggleSwitch: handleHeroToggleSwitch,
+    handleToggleDipBit: handleHeroToggleDipBit,
+  } = useSimulationPlayback({
+    circuitKey: showcasePresetId,
+    doc: heroDoc,
+    setDoc: setHeroDoc,
+    isRunning: heroAutoPlay,
+    setIsRunning: setHeroAutoPlay,
+    initialPeriodicAdvanceNs: 200,
+    stepDeltaNs: 25,
+    intervalMs: 340,
+    syncWithDoc: false,
+  });
+
   const handleResetShowcase = () => {
     setHeroAutoPlay(false);
     const found = PRESET_CIRCUITS.find((p) => p.id === showcasePresetId) ?? PRESET_CIRCUITS[0];
     const cloned = JSON.parse(JSON.stringify(found.document)) as CircuitDocument;
     setHeroDoc(cloned);
-    heroDocRef.current = cloned;
-    vectorStepRef.current = 0;
-    heroSimRef.current.loadCircuit(cloned);
-    heroSimRef.current.clearWaveformHistory();
-    setHeroSnap(heroSimRef.current.getSnapshot());
-    setHeroWaves([]);
+    loadIntoSimulator(found.id, cloned, { clearWaveforms: true });
   };
 
   const switchShowcasePreset = (presetId: string) => {
@@ -122,115 +121,12 @@ export const DashboardPage: React.FC = () => {
     const cloned = JSON.parse(JSON.stringify(found.document)) as CircuitDocument;
     setShowcasePresetId(found.id);
     setHeroDoc(cloned);
-    heroDocRef.current = cloned;
-    vectorStepRef.current = 0;
-    heroSimRef.current.loadCircuit(cloned);
-    const hasPeriodic = cloned.nodes.some((n) => n.type === 'CLOCK' || n.type === 'TIMER_555');
-    const snap = hasPeriodic
-      ? heroSimRef.current.advanceBy(200)
-      : heroSimRef.current.settleCombinational(300);
-    setHeroSnap(snap);
-    setHeroWaves([...heroSimRef.current.getWaveformHistory()]);
+    loadIntoSimulator(found.id, cloned, { clearWaveforms: false, advanceNs: 200 });
     setHeroSelectedNodeId(cloned.nodes[0]?.id ?? null);
   };
 
-  const stepShowcaseSimulation = useCallback(() => {
-    const curDoc = heroDocRef.current;
-    const hasPeriodic = curDoc.nodes.some((n) => n.type === 'CLOCK' || n.type === 'TIMER_555');
-
-    if (!hasPeriodic) {
-      const switches = curDoc.nodes.filter((n) => n.type === 'INPUT_SWITCH');
-      const dipNodes = curDoc.nodes.filter((n) => n.type === 'DIP_SWITCH_4');
-
-      if (switches.length > 0) {
-        vectorStepRef.current += 1;
-        const vec = vectorStepRef.current;
-        const nextMap = new Map<string, LogicState>();
-        switches.forEach((sw, idx) => {
-          const bit: LogicState = ((vec >> idx) & 1) === 1 ? '1' : '0';
-          heroSimRef.current.setInputState(sw.id, bit);
-          nextMap.set(sw.id, bit);
-        });
-        setHeroDoc((prev) => ({
-          ...prev,
-          nodes: prev.nodes.map((n) =>
-            nextMap.has(n.id)
-              ? { ...n, properties: { ...n.properties, switchState: nextMap.get(n.id)! } }
-              : n,
-          ),
-        }));
-      } else if (dipNodes.length > 0) {
-        vectorStepRef.current += 1;
-        const vec = vectorStepRef.current;
-        const dip = dipNodes[0];
-        const nextTuple: [LogicState, LogicState, LogicState, LogicState] = [
-          (vec & 1) === 1 ? '1' : '0',
-          ((vec >> 1) & 1) === 1 ? '1' : '0',
-          ((vec >> 2) & 1) === 1 ? '1' : '0',
-          ((vec >> 3) & 1) === 1 ? '1' : '0',
-        ];
-        nextTuple.forEach((st, bitIdx) => {
-          heroSimRef.current.setDipSwitchBit(dip.id, bitIdx, st);
-        });
-        setHeroDoc((prev) => ({
-          ...prev,
-          nodes: prev.nodes.map((n) =>
-            n.id === dip.id
-              ? { ...n, properties: { ...n.properties, dipSwitchStates: nextTuple } }
-              : n,
-          ),
-        }));
-      }
-    }
-
-    const snap = heroSimRef.current.advanceBy(25);
-    setHeroSnap(snap);
-    setHeroWaves([...heroSimRef.current.getWaveformHistory()]);
-  }, []);
-
-  useEffect(() => {
-    if (!heroAutoPlay) return;
-    const timer = window.setInterval(() => {
-      stepShowcaseSimulation();
-    }, 340);
-    return () => window.clearInterval(timer);
-  }, [heroAutoPlay, stepShowcaseSimulation]);
-
-  const handleHeroToggleSwitch = (node: CircuitNodeData, cycleTriState: boolean) => {
-    const nextVal = heroSimRef.current.toggleInputSwitch(node.id, cycleTriState);
-    const snap = heroSimRef.current.settleCombinational(300);
-    setHeroSnap(snap);
-    setHeroWaves([...heroSimRef.current.getWaveformHistory()]);
-    setHeroDoc((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) =>
-        n.id === node.id ? { ...n, properties: { ...n.properties, switchState: nextVal } } : n,
-      ),
-    }));
-  };
-
-  const handleHeroToggleDipBit = (node: CircuitNodeData, bitIndex: number) => {
-    const nextVal = heroSimRef.current.toggleDipSwitchBit(node.id, bitIndex);
-    const snap = heroSimRef.current.settleCombinational(300);
-    setHeroSnap(snap);
-    setHeroWaves([...heroSimRef.current.getWaveformHistory()]);
-    setHeroDoc((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) => {
-        if (n.id !== node.id) return n;
-        const tuple: [typeof nextVal, typeof nextVal, typeof nextVal, typeof nextVal] = [
-          ...(n.properties.dipSwitchStates ?? ['0', '0', '0', '0']),
-        ] as [typeof nextVal, typeof nextVal, typeof nextVal, typeof nextVal];
-        tuple[bitIndex] = nextVal;
-        return {
-          ...n,
-          properties: {
-            ...n.properties,
-            dipSwitchStates: tuple,
-          },
-        };
-      }),
-    }));
+  const stepShowcaseSimulation = () => {
+    advanceSimulationTick(25);
   };
 
   const heroCanvasNodes = useMemo(
@@ -600,7 +496,7 @@ export const DashboardPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 text-sm font-bold text-win-ink">
                 <BookOpen className="h-4 w-4 text-win-navy shrink-0" aria-hidden="true" />
-                <h2>Бібліотека {COMPONENT_CATALOG.length - 1} ІМС</h2>
+                <h2>Бібліотека {STANDARD_COMPONENT_CATALOG.length} ІМС</h2>
               </div>
               <p className="mt-1 text-xs leading-relaxed text-win-muted">
                 Довідник логічних вентилів, тригерів, регістрів, таймера NE555 та вузлів з

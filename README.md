@@ -14,21 +14,29 @@
 logicforge/
 ├── shared-types/            # Ядро симуляції, графові алгоритми, JSON-схеми та спільні DTO
 │   └── src/
-│       ├── types.ts         # Канонічні інтерфейси Nodes, Edges, PinOffsets, LogicStates
-│       ├── catalog.ts       # Бібліотека 24 цифрових та мікропроцесорних елементів
+│       ├── types.ts         # Канонічний кортеж COMPONENT_TYPES та інтерфейси Nodes, Edges, PinOffsets
+│       ├── catalog.ts       # Бібліотека 31 стандартного елемента (із icCode та STANDARD_COMPONENT_CATALOG)
+│       ├── circuitSanitizer.ts # Zod-валідація JSON та захист від прототипного забруднення
+│       ├── evaluators/      # Типізований вичерпний реєстр NODE_EVALUATORS (combinational / sequential / MSI)
 │       ├── logicAlgebra.ts  # Чотиризначна тристабільна алгебра Кліні / IEEE 1164
 │       ├── graphAnalysis.ts # Union-Find Netlist, алгоритм Кана (DAG + STA), алгоритм Тар'яна (SCC)
 │       ├── minHeap.ts       # Детермінована бінарна купа пріоритетів O(log M)
 │       ├── simulator.ts     # Гібридний дискретно-подійний рушій із затримками поширення
 │       ├── analyzer.ts      # Синтезатор таблиць істинності (ДДНФ), BOM та Netlist звітів
-│       └── presets.ts       # Еталонні схеми (Full Adder, Tri-State Bus, NE555+JK, МП АЛП тощо)
+│       └── presets.ts       # Еталонні схеми та спільний білдер buildHalfAdderCustomIc()
 ├── server/                  # REST API бекенд (Node.js, Express, Zod, JWT, Prisma ORM)
 │   ├── prisma/              # Схема PostgreSQL у 3НФ, SQL-міграції та seed-скрипт
 │   └── src/                 # Маршрути API, сервіси авторизації, репозиторії та Supertest-тести
 ├── client/                  # Веб-застосунок (React 18, TypeScript, Vite, Tailwind CSS)
 │   └── src/
-│       ├── components/      # Універсальні компоненти (Button, Modal, Pin, CircuitNode, PropertyInspector)
-│       └── pages/           # 6 маршрутизованих сторінок інформаційної системи
+│       ├── constants/       # Спільні довідники (SCHEME_CATEGORIES тощо)
+│       ├── hooks/           # Повторно використовувані хуки (useSimulationPlayback, useCircuitHistory, useEditorPanels, usePinchWheelZoom)
+│       ├── components/
+│       │   ├── circuit/     # CircuitCanvas, wireRouting.ts, CircuitNode, symbols/, WaveformPanel, Pin, PropertyInspector
+│       │   ├── editor/      # Модульні панелі редактора (EditorToolbar, ComponentPaletteSidebar, EditorModals)
+│       │   ├── layout/      # Верхня навігація Navbar у стилі Win95
+│       │   └── ui/          # Універсальні Win95-компоненти (Button, Modal, AuthGateModal, MathFormula, Win95Dropdown)
+│       └── pages/           # 7 маршрутизованих сторінок інформаційної системи
 ├── docker-compose.yml       # Контейнеризація PostgreSQL 16 + Server API + Client Nginx
 ├── render.yaml              # Infrastructure-as-Code для Render.com (API + Free PostgreSQL)
 └── vercel.json              # Конфігурація деплою SPA-клієнта на Vercel

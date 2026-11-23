@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, Cpu, FlaskConical, Info, Plus, Search, Table2, Trash2, X } from 'lucide-react';
 import {
   CATEGORY_LABELS,
-  COMPONENT_CATALOG,
   CircuitSimulator,
+  STANDARD_COMPONENT_CATALOG,
   createNodeFromCatalog,
   type ComponentCategory,
   type ComponentType,
@@ -20,31 +20,6 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { api } from '../services/api';
 import { getComponentTruthTable } from '../utils/componentTruthTables';
-
-const IC_SERIES_MAP: Partial<Record<ComponentType, string>> = {
-  AND: '74HC08',
-  OR: '74HC32',
-  NOT: '74HC04',
-  NAND: '74HC00',
-  NOR: '74HC02',
-  XOR: '74HC86',
-  XNOR: '74HC266',
-  BUFFER: '74HC125',
-  SCHMITT_INV: '74HC14',
-  TRI_BUFFER: '74HC244',
-  SR_LATCH: '74HC279',
-  D_FLIPFLOP: '74HC74',
-  JK_FLIPFLOP: '74HC112',
-  T_FLIPFLOP: '74HC73',
-  REGISTER_4BIT: '74HC173',
-  SHIFT_REG_SIPO: '74HC164',
-  COUNTER_4BIT: '74HC161',
-  TIMER_555: 'NE555P',
-  MUX_4TO1: '74HC153',
-  DECODER_2TO4: '74HC139',
-  COMPARATOR_2BIT: '74HC85',
-  ALU_4BIT: '74HC181',
-};
 
 function isLogicStateCell(val: string): val is LogicState {
   return val === '0' || val === '1' || val === 'Z' || val === 'X';
@@ -68,7 +43,10 @@ export const ComponentLibraryPage: React.FC = () => {
   >(['1', '0', '1', '0']);
 
   const activeCatalogItem = useMemo(
-    () => (selectedType ? (COMPONENT_CATALOG.find((c) => c.type === selectedType) ?? null) : null),
+    () =>
+      selectedType
+        ? (STANDARD_COMPONENT_CATALOG.find((c) => c.type === selectedType) ?? null)
+        : null,
     [selectedType],
   );
 
@@ -143,11 +121,10 @@ export const ComponentLibraryPage: React.FC = () => {
 
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return COMPONENT_CATALOG.filter((c) => {
-      if (c.type === 'CUSTOM_IC') return false;
+    return STANDARD_COMPONENT_CATALOG.filter((c) => {
       if (categoryFilter !== 'ALL' && c.category !== categoryFilter) return false;
       if (q) {
-        const icCode = IC_SERIES_MAP[c.type] ?? '';
+        const icCode = c.icCode ?? '';
         const haystack =
           `${c.name} ${c.shortLabel} ${c.type} ${icCode} ${c.description} ${CATEGORY_LABELS[c.category]}`.toLowerCase();
         if (!haystack.includes(q)) return false;
@@ -165,7 +142,7 @@ export const ComponentLibraryPage: React.FC = () => {
             <div className="flex items-center gap-2 min-w-0">
               <BookOpen className="h-4 w-4 shrink-0 text-win-navy" aria-hidden="true" />
               <h1 className="text-sm font-bold text-win-ink truncate">
-                Каталог елементної бази ({COMPONENT_CATALOG.length - 1} стандартних типів)
+                Каталог елементної бази ({STANDARD_COMPONENT_CATALOG.length} стандартних типів)
               </h1>
             </div>
 
@@ -197,7 +174,7 @@ export const ComponentLibraryPage: React.FC = () => {
 
               <div className="win95-statusbar-cell px-2 py-0.5 font-mono text-xs font-bold text-win-ink">
                 Знайдено: <strong className="text-win-navy">{filteredItems.length}</strong> /{' '}
-                {COMPONENT_CATALOG.length - 1}
+                {STANDARD_COMPONENT_CATALOG.length}
               </div>
             </div>
           </div>
@@ -213,12 +190,10 @@ export const ComponentLibraryPage: React.FC = () => {
                   : 'win95-button text-win-ink'
               }`}
             >
-              Усі ({COMPONENT_CATALOG.length - 1})
+              Усі ({STANDARD_COMPONENT_CATALOG.length})
             </button>
             {(Object.keys(CATEGORY_LABELS) as ComponentCategory[]).map((cat) => {
-              const count = COMPONENT_CATALOG.filter(
-                (c) => c.type !== 'CUSTOM_IC' && c.category === cat,
-              ).length;
+              const count = STANDARD_COMPONENT_CATALOG.filter((c) => c.category === cat).length;
               return (
                 <button
                   key={cat}
@@ -262,7 +237,7 @@ export const ComponentLibraryPage: React.FC = () => {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item) => {
-              const icCode = IC_SERIES_MAP[item.type];
+              const icCode = item.icCode;
               const inputPins = item.defaultPins.filter((p) => p.direction === 'INPUT');
               const outputPins = item.defaultPins.filter((p) => p.direction === 'OUTPUT');
 
@@ -387,9 +362,7 @@ export const ComponentLibraryPage: React.FC = () => {
           title={
             activeCatalogItem
               ? `${activeCatalogItem.name} (${activeCatalogItem.shortLabel}${
-                  IC_SERIES_MAP[activeCatalogItem.type]
-                    ? ` • ${IC_SERIES_MAP[activeCatalogItem.type]}`
-                    : ''
+                  activeCatalogItem.icCode ? ` • ${activeCatalogItem.icCode}` : ''
                 })`
               : 'Специфікація компонента'
           }
@@ -435,7 +408,7 @@ export const ComponentLibraryPage: React.FC = () => {
                   <div className="win95-statusbar-cell p-2">
                     <div className="text-[10px] text-win-muted">Серія ІМС</div>
                     <div className="font-mono text-xs font-bold text-win-navy">
-                      {IC_SERIES_MAP[activeCatalogItem.type] ?? 'Стандартний елемент'}
+                      {activeCatalogItem.icCode ?? 'Стандартний елемент'}
                     </div>
                   </div>
                   <div className="win95-statusbar-cell p-2">

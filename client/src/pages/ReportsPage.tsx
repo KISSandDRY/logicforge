@@ -11,7 +11,7 @@ import { Button, getButtonClassName } from '../components/ui/Button';
 import { CircuitCanvas } from '../components/circuit/CircuitCanvas';
 import { LogicBadge } from '../components/ui/LogicBadge';
 import { BooleanSopFormula, MathVar } from '../components/ui/MathFormula';
-import { Modal } from '../components/ui/Modal';
+import { AuthGateModal } from '../components/ui/AuthGateModal';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { api } from '../services/api';
@@ -548,28 +548,11 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      <Modal
-        open={Boolean(authGateFeature)}
+      <AuthGateModal
+        featureName={authGateFeature}
         onClose={() => setAuthGateFeature(null)}
-        title="Потрібна авторизація"
-        subtitle="Ця можливість доступна лише зареєстрованим користувачам."
-        maxWidthClass="max-w-md"
-      >
-        <div className="space-y-3 text-xs text-win-ink" data-testid="reports-auth-gate-dialog">
-          <p className="leading-relaxed">
-            Для дії <strong>«{authGateFeature}»</strong> увійдіть у наявний обліковий запис або
-            зареєструйте новий акаунт інженера.
-          </p>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <Link to="/login" className={getButtonClassName('primary', 'sm')}>
-              Увійти в акаунт →
-            </Link>
-            <Link to="/register" className={getButtonClassName('secondary', 'sm')}>
-              Реєстрація →
-            </Link>
-          </div>
-        </div>
-      </Modal>
+        testId="reports-auth-gate-dialog"
+      />
     </div>
   );
 };
