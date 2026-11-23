@@ -2,37 +2,340 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes wirePulse {
-  0% {
-    stroke-dashoffset: 24;
+:root {
+  --win-bg: #c0c0c0;
+  --win-surface: #dfdfdf;
+  --win-highlight: #ffffff;
+  --win-shadow-dark: #808080;
+  --win-shadow-darker: #000000;
+  --win-titlebar-start: #000080;
+  --win-titlebar-end: #0b67a8;
+  --win-teal: #008080;
+  --win-titlebar: linear-gradient(
+    90deg,
+    var(--win-titlebar-start) 0%,
+    var(--win-titlebar-end) 100%
+  );
+  --win-titlebar-inactive: #595959;
+  --win-canvas: #ffffff;
+  --win-ink: #000000;
+  --win-ink-muted: #3b3b3b;
+
+  /* Класичні апаратні кольори VGA / IEEE 1164 без пастельних заливок */
+  --logic-1: #008000;
+  --logic-1-wire: #009900;
+  --logic-1-bg: #ffffff;
+  --logic-1-border: #008000;
+  --logic-0: #1a1a1a;
+  --logic-0-bg: #efefef;
+  --logic-z: #806000;
+  --logic-z-bg: #f8f6ee;
+  --logic-x: #cc0000;
+  --logic-x-bg: #fff2f2;
+}
+
+@layer components {
+  /* Фонова підкладка робочого столу / вікна застосунку Windows 95 */
+  .win95-desktop-bg,
+  .eda-page-bg {
+    background-color: var(--win-bg);
+    color: var(--win-ink);
+    font-family: 'Tahoma', 'MS Sans Serif', 'Microsoft Sans Serif', Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.3;
   }
-  100% {
-    stroke-dashoffset: 0;
+
+  /* Опуклий 2px 3D-рельєф Windows 95 (піднята панель) */
+  .win95-outset {
+    background-color: var(--win-bg);
+    box-shadow:
+      inset 1px 1px 0px var(--win-highlight),
+      inset -1px -1px 0px var(--win-shadow-darker),
+      inset 2px 2px 0px var(--win-surface),
+      inset -2px -2px 0px var(--win-shadow-dark);
+  }
+
+  /* Вдавлений 2px 3D-рельєф Windows 95 (робоча область схеми, таблиці, списки) */
+  .win95-inset {
+    background-color: var(--win-highlight);
+    box-shadow:
+      inset 1px 1px 0px var(--win-shadow-dark),
+      inset -1px -1px 0px var(--win-highlight),
+      inset 2px 2px 0px var(--win-shadow-darker),
+      inset -2px -2px 0px var(--win-surface);
+  }
+
+  /* Вдавлене поле введення тексту / списку вибору у стилі Windows 95 */
+  .win95-field {
+    background-color: var(--win-highlight);
+    color: var(--win-ink);
+    border: none;
+    border-radius: 0;
+    box-shadow:
+      inset 1px 1px 0px var(--win-shadow-dark),
+      inset -1px -1px 0px var(--win-highlight),
+      inset 2px 2px 0px var(--win-shadow-darker),
+      inset -2px -2px 0px var(--win-surface);
+  }
+
+  /* Вдавлене поле з помилкою валідації у стилі Windows 95 */
+  .win95-field-error {
+    background-color: var(--logic-x-bg);
+    color: var(--win-ink);
+    border: none;
+    border-radius: 0;
+    outline: 1px solid var(--logic-x);
+    box-shadow:
+      inset 1px 1px 0px var(--logic-x),
+      inset -1px -1px 0px var(--win-highlight),
+      inset 2px 2px 0px #800000,
+      inset -2px -2px 0px #ffcccc;
+  }
+
+  .win95-number-raw::-webkit-outer-spin-button,
+  .win95-number-raw::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .win95-number-raw {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  select.win95-field {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 26px;
+    background-color: var(--win-highlight);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='22' viewBox='0 0 20 22'%3E%3Crect x='0' y='0' width='20' height='22' fill='%23c0c0c0'/%3E%3Cpath d='M0 21 V0 H19' fill='none' stroke='%23ffffff' stroke-width='1'/%3E%3Cpath d='M1 20 V1 H18' fill='none' stroke='%23dfdfdf' stroke-width='1'/%3E%3Cpath d='M19 0 V21 H0' fill='none' stroke='%23000000' stroke-width='1'/%3E%3Cpath d='M18 1 V20 H1' fill='none' stroke='%23808080' stroke-width='1'/%3E%3Cpolygon points='6,9 14,9 10,14' fill='%23000000'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 2px center;
+    background-size: 20px calc(100% - 4px);
+    cursor: pointer;
+  }
+
+  input.win95-field,
+  select.win95-field,
+  textarea.win95-field {
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  @media (min-width: 768px) and (pointer: fine) {
+    input.win95-field,
+    select.win95-field,
+    textarea.win95-field {
+      font-size: 0.75rem;
+      line-height: 1.25;
+    }
+  }
+
+  .win95-field:focus {
+    outline: 1px dotted var(--win-shadow-darker);
+    outline-offset: -3px;
+  }
+
+  /* Вікно інструментальної панелі Windows 95 */
+  .win95-window,
+  .eda-frame {
+    background-color: var(--win-bg);
+    padding: 2px;
+    border: none;
+    border-radius: 0;
+    box-shadow:
+      inset 1px 1px 0px var(--win-highlight),
+      inset -1px -1px 0px var(--win-shadow-darker),
+      inset 2px 2px 0px var(--win-surface),
+      inset -2px -2px 0px var(--win-shadow-dark);
+  }
+
+  /* Класична темно-синя смуга заголовка вікна Windows 95 */
+  .win95-titlebar,
+  .eda-panel-header {
+    background: var(--win-titlebar);
+    color: var(--win-highlight);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  .win95-titlebar-inactive {
+    background: var(--win-titlebar-inactive);
+    color: var(--win-highlight);
+    font-weight: 700;
+  }
+
+  /* Вдавлена комірка рядка стану Windows 95 (Status Bar Cell) */
+  .win95-statusbar-cell {
+    background-color: var(--win-bg);
+    color: var(--win-ink);
+    box-shadow:
+      inset 1px 1px 0px var(--win-shadow-dark),
+      inset -1px -1px 0px var(--win-highlight);
+  }
+
+  /* Тактильна кнопка Windows 95 із інверсією фаски при натисканні */
+  .win95-button {
+    background-color: var(--win-bg);
+    color: var(--win-ink);
+    border: none;
+    border-radius: 0;
+    box-shadow:
+      inset 1px 1px 0px var(--win-highlight),
+      inset -1px -1px 0px var(--win-shadow-darker),
+      inset 2px 2px 0px var(--win-surface),
+      inset -2px -2px 0px var(--win-shadow-dark);
+  }
+
+  .win95-button:hover:not(:disabled) {
+    background-color: var(--win-surface);
+  }
+
+  .win95-button:active:not(:disabled),
+  .win95-button-pressed {
+    background-color: var(--win-surface);
+    box-shadow:
+      inset 1px 1px 0px var(--win-shadow-darker),
+      inset -1px -1px 0px var(--win-highlight),
+      inset 2px 2px 0px var(--win-shadow-dark),
+      inset -2px -2px 0px var(--win-bg);
+    transform: translate(1px, 1px);
+  }
+
+  .win95-button:focus-visible {
+    outline: 1px dotted var(--win-shadow-darker);
+    outline-offset: -4px;
+  }
+
+  @media (pointer: coarse) {
+    .win95-button {
+      min-height: 2.25rem;
+      min-width: 2.25rem;
+    }
+  }
+
+  /* Полотно принципової схеми всередині вдавленого вікна .win95-inset */
+  .cad-grid-bg {
+    background-color: var(--win-canvas);
+    background-image: radial-gradient(circle, var(--win-shadow-dark) 1px, transparent 1px);
+    background-size: 16px 16px;
   }
 }
 
-.wire-active-flow {
-  stroke-dasharray: 8 4;
-  animation: wirePulse 0.75s linear infinite;
+/* Смуги прокрутки у стилі класичного настільного інтерфейсу */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: var(--win-bg) var(--win-surface);
 }
 
-.cad-grid-bg {
-  background-color: #090d16;
-  background-image:
-    radial-gradient(circle, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
-    linear-gradient(to right, rgba(30, 41, 59, 0.35) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(30, 41, 59, 0.35) 1px, transparent 1px);
-  background-size:
-    16px 16px,
-    80px 80px,
-    80px 80px;
+:focus-visible {
+  outline: 1px dotted var(--win-shadow-darker);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  .win95-button:active:not(:disabled),
+  .win95-button-pressed {
+    transform: none;
+  }
 }
 
 @media print {
-  body {
-    background: #ffffff !important;
-    color: #0f172a !important;
+  @page {
+    size: A4 portrait;
+    margin: 14mm 10mm 16mm 18mm;
+
+    @top-left {
+      content: 'LOGICFORGE САПР • КОНСТРУКТОРСЬКА ДОКУМЕНТАЦІЯ';
+      font-family: 'Courier New', monospace;
+      font-size: 7.5pt;
+      color: #333333;
+    }
+
+    @top-right {
+      content: 'ДСТУ / ЄСКД 2.701';
+      font-family: 'Courier New', monospace;
+      font-size: 7.5pt;
+      color: #333333;
+    }
+
+    @bottom-left {
+      content: 'Формат А4 • Оригінал цифрової схеми';
+      font-family: 'Courier New', monospace;
+      font-size: 8pt;
+      color: #000000;
+    }
+
+    @bottom-right {
+      content: 'Аркуш ' counter(page) ' з ' counter(pages);
+      font-family: 'Tahoma', Arial, sans-serif;
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: #000000;
+    }
   }
+
+  body,
+  .win95-desktop-bg,
+  .eda-page-bg {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-auth-required .print-cad-sheet {
+    display: none !important;
+  }
+
+  .print-cad-sheet {
+    border: 2px solid #000000 !important;
+    padding: 8px !important;
+    background: #ffffff !important;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .print-clean-canvas .win95-inset,
+  .print-cad-sheet section.win95-window .win95-inset {
+    border: none !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .print-hide-grid {
+    display: none !important;
+  }
+
+  .win95-window,
+  .win95-outset,
+  .win95-inset,
+  .win95-statusbar-cell {
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+  }
+
+  .win95-titlebar {
+    background: #efefef !important;
+    color: #000000 !important;
+    border-bottom: 1.5px solid #000000 !important;
+    break-after: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  .cad-titleblock,
+  tr {
+    break-inside: avoid;
+  }
+
   .no-print {
     display: none !important;
   }

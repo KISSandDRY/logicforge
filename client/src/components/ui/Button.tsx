@@ -11,26 +11,32 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary:
-    'bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 shadow-sm shadow-emerald-500/20',
-  secondary: 'bg-slate-800 text-slate-100 hover:bg-slate-700 border border-slate-700',
-  outline:
-    'bg-transparent text-slate-200 border border-slate-700 hover:border-emerald-500/60 hover:text-emerald-300',
-  ghost: 'bg-transparent text-slate-300 hover:bg-slate-800/80 hover:text-white',
-  danger: 'bg-rose-500/15 text-rose-300 border border-rose-500/40 hover:bg-rose-500/25',
-  success: 'bg-teal-500/20 text-teal-200 border border-teal-500/40 hover:bg-teal-500/30',
+  primary: 'win95-button font-bold text-win-ink ring-1 ring-inset ring-win-darker',
+  secondary: 'win95-button font-medium text-win-ink',
+  outline: 'win95-button font-medium text-win-ink',
+  ghost:
+    'bg-transparent text-win-ink font-medium hover:win95-outset active:win95-inset rounded-none',
+  danger: 'win95-button font-bold text-logic-x',
+  success: 'win95-button font-bold text-logic-high',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  xs: 'px-2 py-1 text-xs rounded-md gap-1',
-  sm: 'px-2.5 py-1.5 text-xs rounded-lg gap-1.5',
-  md: 'px-3.5 py-2 text-sm rounded-lg gap-2',
-  lg: 'px-5 py-2.5 text-sm rounded-xl gap-2',
+  xs: 'min-h-7 min-w-7 coarse:min-h-9 coarse:min-w-9 px-2 py-1 text-[11px] gap-1',
+  sm: 'min-h-7 min-w-7 coarse:min-h-9 coarse:min-w-9 px-2.5 py-1 text-xs gap-1.5',
+  md: 'min-h-8 min-w-8 coarse:min-h-9 coarse:min-w-9 px-3.5 py-1.5 text-xs font-bold gap-1.5',
+  lg: 'min-h-9 min-w-9 px-5 py-2 text-sm font-bold gap-2',
 };
 
+export function getButtonClassName(
+  variant: ButtonVariant = 'secondary',
+  size: ButtonSize = 'md',
+  className = '',
+): string {
+  return `inline-flex items-center justify-center select-none touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
+}
+
 /**
- * Універсальний адаптивний компонент кнопки (Button), що перевикористовується
- * на всіх 6 сторінках додатку, в панелях керування симуляцією та модальних вікнах.
+ * Універсальний компонент кнопки у класичному тактильному стилі Windows 95 (.win95-button).
  */
 export const Button: React.FC<ButtonProps> = ({
   variant = 'secondary',
@@ -45,11 +51,24 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      aria-busy={loading || undefined}
+      className={getButtonClassName(variant, size, className)}
       {...rest}
     >
       {loading ? (
-        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <>
+          <span
+            aria-hidden="true"
+            className="h-3.5 w-3.5 animate-spin motion-reduce:hidden border-2 border-current border-t-transparent"
+          />
+          <span
+            aria-hidden="true"
+            className="hidden motion-reduce:inline-block font-mono text-xs leading-none"
+          >
+            ...
+          </span>
+          <span className="sr-only">Виконання...</span>
+        </>
       ) : (
         icon
       )}

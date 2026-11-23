@@ -38,13 +38,19 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: 'include',
     headers,
   });
 
-  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const contentType = res.headers.get('content-type') ?? '';
+  const isJson = contentType.includes('application/json');
+  const payload = isJson ? ((await res.json().catch(() => ({}))) as Record<string, unknown>) : {};
   if (!res.ok) {
     const errMsg = typeof payload.error === 'string' ? payload.error : `HTTP Error ${res.status}`;
     throw new Error(errMsg);
+  }
+  if (!isJson && res.status !== 204) {
+    throw new Error('API unavailable: non-JSON response');
   }
   return payload as T;
 }
@@ -68,6 +74,8 @@ export const api = {
     apiRequest<AuthResponseDTO>('/auth/demo', {
       method: 'POST',
     }),
+
+  logout: () => apiRequest<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
 
   me: () => apiRequest<{ user: UserDTO }>('/auth/me'),
 
@@ -154,6 +162,15 @@ export const api = {
   createCustomComponent: (data: Omit<CustomICDefinition, 'id'> & { isShared?: boolean }) =>
     apiRequest<{ customComponent: CustomICDefinition }>('/components/custom', {
       method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateCustomComponent: (
+    id: string,
+    data: Partial<Omit<CustomICDefinition, 'id'>> & { isShared?: boolean },
+  ) =>
+    apiRequest<{ customComponent: CustomICDefinition }>(`/components/custom/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(data),
     }),
 
