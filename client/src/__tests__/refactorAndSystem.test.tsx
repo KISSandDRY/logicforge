@@ -650,6 +650,8 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
     expect(html).toContain('Реєстрація');
     expect(html).not.toContain('<select');
     expect(html).not.toContain('ЗАПУСТИТИ СИМУЛЯЦІЮ');
+    expect(html).toContain('w-full flex-nowrap items-center justify-between gap-2 px-2.5');
+    expect(html).not.toContain('max-w-[1680px]');
   });
 
   it('renders Home Dashboard centered on 4 demo presets + playback toolbar + 3 quick-start cards', () => {

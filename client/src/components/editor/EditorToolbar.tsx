@@ -88,7 +88,10 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = React.memo(
     onOpenJson,
     onOpenSaveRevision,
   }) => (
-    <div className="win95-outset flex flex-wrap items-center justify-between gap-1.5 px-2.5 py-1.5">
+    <div
+      data-testid="editor-toolbar"
+      className="win95-outset flex flex-wrap items-center justify-between gap-1.5 px-2.5 py-1.5"
+    >
       <div className="flex flex-wrap items-center gap-1.5 min-w-0 max-w-full w-full lg:w-auto">
         <Win95Dropdown
           testId="editor-circuit-select"

@@ -99,7 +99,7 @@ export const Navbar: React.FC = () => {
   return (
     <>
       <header className="no-print sticky top-0 z-40 win95-outset bg-win-bg text-win-ink">
-        <div className="mx-auto flex h-10 max-w-[1680px] flex-nowrap items-center justify-between gap-2 px-2.5 text-xs">
+        <div className="flex h-10 w-full flex-nowrap items-center justify-between gap-2 px-2.5 text-xs">
           <div className="flex items-center gap-1.5 min-w-0">
             <Link
               to="/"

@@ -1086,6 +1086,29 @@ async function run() {
     await cdp.eval(`document.querySelector('[data-testid="btn-toggle-run"]')?.click()`);
     await sleep(120);
 
+    await cdp.setViewport(1920, 1080, false);
+    await sleep(120);
+    const barAlignment = await cdp.eval(`(() => {
+      const headerInner = document.querySelector('header > div');
+      const toolbar = document.querySelector('[data-testid="editor-toolbar"]');
+      const leftNav = headerInner?.children[0]?.getBoundingClientRect();
+      const rightNav = headerInner?.children[1]?.getBoundingClientRect();
+      const leftTool = toolbar?.children[0]?.getBoundingClientRect();
+      const rightTool = toolbar?.children[toolbar.children.length - 1]?.getBoundingClientRect();
+      return {
+        leftDiff: leftNav && leftTool ? Math.abs(leftNav.left - leftTool.left) : -1,
+        rightDiff: rightNav && rightTool ? Math.abs(rightNav.right - rightTool.right) : -1,
+      };
+    })()`);
+    assert.ok(
+      barAlignment.leftDiff >= 0 && barAlignment.leftDiff <= 1,
+      `Navbar left edge must align with editor toolbar on 1920px desktop, diff=${barAlignment.leftDiff}`,
+    );
+    assert.ok(
+      barAlignment.rightDiff >= 0 && barAlignment.rightDiff <= 1,
+      `Navbar right edge must align with editor toolbar on 1920px desktop, diff=${barAlignment.rightDiff}`,
+    );
+
     for (const width of [1440, 1280]) {
       await cdp.setViewport(width, 860, false);
       await sleep(220);
