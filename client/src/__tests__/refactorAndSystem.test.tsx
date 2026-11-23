@@ -789,6 +789,10 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
     expect(html).toContain('Створити ІМС');
     expect(html).not.toContain('Зберегти в ІМС');
     expect(html).not.toContain('ПАНЕЛЬ УПРАВЛІННЯ');
+    expect(html).not.toContain('Зменшити масштаб схеми');
+    expect(html).not.toContain('Збільшити масштаб схеми');
+    expect(html).toContain('data-testid="btn-toggle-maximize-workspace"');
+    expect(html).toContain('data-testid="canvas-zoom-label"');
   });
 
   it('uses Win95Dropdown everywhere (no native <select>), Win95NumberInput spinners, and Saleae waveform background without dot grid', () => {

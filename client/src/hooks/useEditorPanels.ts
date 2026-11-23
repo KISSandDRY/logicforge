@@ -105,6 +105,24 @@ export function useEditorPanels() {
     });
   };
 
+  const toggleLeftPanel = () => {
+    if (maximizedWindow === 'workspace') {
+      setMaximizedWindow(null);
+      setShowLeftPanel(true);
+      return;
+    }
+    setShowLeftPanel((v) => !v);
+  };
+
+  const toggleRightPanel = () => {
+    if (maximizedWindow === 'workspace') {
+      setMaximizedWindow(null);
+      setShowRightPanel(true);
+      return;
+    }
+    setShowRightPanel((v) => !v);
+  };
+
   const toggleSignalsPanel = () => {
     if (maximizedWindow === 'signals') {
       setMaximizedWindow(null);
@@ -136,6 +154,8 @@ export function useEditorPanels() {
     startResizeLeft,
     startResizeRight,
     startResizeSignal,
+    toggleLeftPanel,
+    toggleRightPanel,
     toggleSignalsPanel,
   };
 }

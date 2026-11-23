@@ -1098,6 +1098,66 @@ async function run() {
       'Editor library cards must render exact canvas CircuitNode symbols',
     );
 
+    const beforeMaxState = await cdp.eval(`(() => {
+      const ws = document.querySelector('section[aria-label="Робоче полотно схеми"]');
+      return {
+        topZoomBtns: ws ? ws.querySelectorAll('.win95-titlebar button[aria-label*="масштаб"]').length : -1,
+        statusZoomLabel: Boolean(ws?.querySelector('[data-testid="canvas-zoom-label"]')),
+        workspaceWidth: ws ? ws.getBoundingClientRect().width : 0,
+        asideCount: document.querySelectorAll('aside').length,
+        hasLeftPalette: Boolean(document.querySelector('[data-testid="palette-item-INPUT_SWITCH"]')),
+        hasRightInspector: Boolean(document.querySelector('[data-testid="resizer-right"] + aside')),
+        hasSignals: Boolean(document.querySelector('[data-testid="signals-window"]')),
+        hasSignalResizer: Boolean(document.querySelector('[data-testid="resizer-signals"]')),
+      };
+    })()`);
+    assert.equal(beforeMaxState.topZoomBtns, 0, 'Duplicate zoom controls in top titlebar must be removed');
+    assert.equal(beforeMaxState.statusZoomLabel, true, 'Zoom statusbar control must remain at bottom');
+    assert.equal(beforeMaxState.asideCount, 2);
+    assert.equal(beforeMaxState.hasLeftPalette, true);
+    assert.equal(beforeMaxState.hasRightInspector, true);
+    assert.equal(beforeMaxState.hasSignals, true);
+
+    await cdp.eval(`document.querySelector('[data-testid="btn-toggle-maximize-workspace"]')?.click()`);
+    await sleep(120);
+    const maximizedState = await cdp.eval(`(() => {
+      const ws = document.querySelector('section[aria-label="Робоче полотно схеми"]');
+      return {
+        workspaceWidth: ws ? ws.getBoundingClientRect().width : 0,
+        asideCount: document.querySelectorAll('aside').length,
+        hasLeftPalette: Boolean(document.querySelector('[data-testid="palette-item-INPUT_SWITCH"]')),
+        hasRightInspector: Boolean(document.querySelector('[data-testid="resizer-right"] + aside')),
+        hasSignals: Boolean(document.querySelector('[data-testid="signals-window"]')),
+        hasLeftResizer: Boolean(document.querySelector('[data-testid="resizer-left"]')),
+        hasRightResizer: Boolean(document.querySelector('[data-testid="resizer-right"]')),
+        hasSignalResizer: Boolean(document.querySelector('[data-testid="resizer-signals"]')),
+      };
+    })()`);
+    assert.ok(
+      maximizedState.workspaceWidth > beforeMaxState.workspaceWidth + 300,
+      'Maximizing workspace must expand width across full editor body',
+    );
+    assert.equal(maximizedState.asideCount, 0);
+    assert.equal(maximizedState.hasLeftPalette, false);
+    assert.equal(maximizedState.hasRightInspector, false);
+    assert.equal(maximizedState.hasSignals, false);
+    assert.equal(maximizedState.hasLeftResizer, false);
+    assert.equal(maximizedState.hasRightResizer, false);
+    assert.equal(maximizedState.hasSignalResizer, false);
+
+    await cdp.eval(`document.querySelector('[data-testid="btn-toggle-maximize-workspace"]')?.click()`);
+    await sleep(120);
+    const restoredState = await cdp.eval(`({
+      asideCount: document.querySelectorAll('aside').length,
+      hasLeftPalette: Boolean(document.querySelector('[data-testid="palette-item-INPUT_SWITCH"]')),
+      hasRightInspector: Boolean(document.querySelector('[data-testid="resizer-right"] + aside')),
+      hasSignals: Boolean(document.querySelector('[data-testid="signals-window"]')),
+    })`);
+    assert.equal(restoredState.asideCount, 2);
+    assert.equal(restoredState.hasLeftPalette, true);
+    assert.equal(restoredState.hasRightInspector, true);
+    assert.equal(restoredState.hasSignals, true);
+
     await cdp.navigate('/editor/preset-full-adder');
     await cdp.eval(`document.querySelector('[data-testid="btn-truth-table"]')?.click()`);
     await sleep(200);

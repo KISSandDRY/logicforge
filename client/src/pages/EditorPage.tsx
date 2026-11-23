@@ -8,8 +8,6 @@ import {
   Minus,
   PanelLeft,
   PanelRight,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import {
   STANDARD_COMPONENT_CATALOG,
@@ -28,7 +26,6 @@ import { WaveformPanel } from '../components/circuit/WaveformPanel';
 import { ComponentPaletteSidebar } from '../components/editor/ComponentPaletteSidebar';
 import { EditorModals } from '../components/editor/EditorModals';
 import { EditorToolbar } from '../components/editor/EditorToolbar';
-import { Button } from '../components/ui/Button';
 import type { Win95DropdownOption } from '../components/ui/Win95Dropdown';
 import { useAuth } from '../context/AuthContext';
 import { useWorkspace } from '../context/WorkspaceContext';
@@ -582,12 +579,12 @@ export const EditorPage: React.FC = () => {
         onRedo={handleRedo}
         canClearCanvas={doc.nodes.length > 0 || doc.edges.length > 0}
         onClearCanvas={handleClearCanvas}
-        showLeftPanel={panels.showLeftPanel}
-        onToggleLeftPanel={() => panels.setShowLeftPanel((v) => !v)}
+        showLeftPanel={panels.showLeftPanel && panels.maximizedWindow !== 'workspace'}
+        onToggleLeftPanel={panels.toggleLeftPanel}
         showSignalsActive={panels.showSignalPanel && panels.maximizedWindow !== 'workspace'}
         onToggleSignalsPanel={panels.toggleSignalsPanel}
-        showRightPanel={panels.showRightPanel}
-        onToggleRightPanel={() => panels.setShowRightPanel((v) => !v)}
+        showRightPanel={panels.showRightPanel && panels.maximizedWindow !== 'workspace'}
+        onToggleRightPanel={panels.toggleRightPanel}
         onOpenTruthTable={handleOpenTruthTable}
         isAuthenticated={Boolean(user)}
         onOpenCustomIc={() => {
@@ -623,51 +620,53 @@ export const EditorPage: React.FC = () => {
       )}
 
       {/* Мобільний перемикач панелей для телефонів та планшетів (< 1024px) */}
-      <div
-        data-testid="editor-mobile-tabs"
-        className="flex lg:hidden items-center gap-1 border-b border-win-shadow bg-win-bg px-2 py-1"
-      >
-        <button
-          type="button"
-          onClick={() => panels.setMobilePanelTab('workspace')}
-          className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
-            panels.mobilePanelTab === 'workspace'
-              ? 'win95-button-pressed bg-win-surface text-win-ink'
-              : 'win95-button text-win-ink'
-          }`}
+      {panels.maximizedWindow !== 'workspace' && (
+        <div
+          data-testid="editor-mobile-tabs"
+          className="flex lg:hidden items-center gap-1 border-b border-win-shadow bg-win-bg px-2 py-1"
         >
-          <Activity className="h-3.5 w-3.5 text-win-navy" />
-          <span>Полотно + Сигнали</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => panels.setMobilePanelTab('palette')}
-          className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
-            panels.mobilePanelTab === 'palette'
-              ? 'win95-button-pressed bg-win-surface text-win-ink'
-              : 'win95-button text-win-ink'
-          }`}
-        >
-          <PanelLeft className="h-3.5 w-3.5 text-win-navy" />
-          <span>Бібліотека ({STANDARD_COMPONENT_CATALOG.length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => panels.setMobilePanelTab('inspector')}
-          className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
-            panels.mobilePanelTab === 'inspector'
-              ? 'win95-button-pressed bg-win-surface text-win-ink'
-              : 'win95-button text-win-ink'
-          }`}
-        >
-          <PanelRight className="h-3.5 w-3.5 text-win-navy" />
-          <span>Інспектор</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => panels.setMobilePanelTab('workspace')}
+            className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
+              panels.mobilePanelTab === 'workspace'
+                ? 'win95-button-pressed bg-win-surface text-win-ink'
+                : 'win95-button text-win-ink'
+            }`}
+          >
+            <Activity className="h-3.5 w-3.5 text-win-navy" />
+            <span>Полотно + Сигнали</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => panels.setMobilePanelTab('palette')}
+            className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
+              panels.mobilePanelTab === 'palette'
+                ? 'win95-button-pressed bg-win-surface text-win-ink'
+                : 'win95-button text-win-ink'
+            }`}
+          >
+            <PanelLeft className="h-3.5 w-3.5 text-win-navy" />
+            <span>Бібліотека ({STANDARD_COMPONENT_CATALOG.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => panels.setMobilePanelTab('inspector')}
+            className={`flex-1 inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 py-1 text-xs font-bold touch-manipulation ${
+              panels.mobilePanelTab === 'inspector'
+                ? 'win95-button-pressed bg-win-surface text-win-ink'
+                : 'win95-button text-win-ink'
+            }`}
+          >
+            <PanelRight className="h-3.5 w-3.5 text-win-navy" />
+            <span>Інспектор</span>
+          </button>
+        </div>
+      )}
 
       {/* Основна гнучка багатопанельна робоча область САПР у стилі вікон Windows 95 */}
       <div ref={panels.editorBodyRef} className="flex flex-1 min-h-0 p-1.5 overflow-hidden">
-        {panels.showLeftPanel && (
+        {panels.showLeftPanel && panels.maximizedWindow !== 'workspace' && (
           <ComponentPaletteSidebar
             formId={formId}
             widthPx={panels.leftPanelWidth}
@@ -683,32 +682,36 @@ export const EditorPage: React.FC = () => {
           />
         )}
 
-        <div
-          data-testid="resizer-left"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Зміна ширини палітри компонентів"
-          onPointerDown={panels.startResizeLeft}
-          onDoubleClick={() => panels.setShowLeftPanel((v) => !v)}
-          title={
-            panels.showLeftPanel
-              ? 'Потягніть вліво щоб зменшити або закрити бібліотеку компонентів'
-              : 'Потягніть праворуч або двічі клацніть щоб відкрити бібліотеку компонентів'
-          }
-          className={`hidden lg:flex group w-2.5 coarse:w-4 shrink-0 select-none touch-none cursor-col-resize items-center justify-center transition-colors ${
-            panels.showLeftPanel
-              ? 'hover:bg-win-surface'
-              : 'win95-outset bg-win-surface hover:bg-win-highlight'
-          }`}
-        >
-          <div className="h-12 w-1 border-x border-win-shadow bg-win-highlight/60" />
-        </div>
+        {panels.maximizedWindow !== 'workspace' && (
+          <div
+            data-testid="resizer-left"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Зміна ширини палітри компонентів"
+            onPointerDown={panels.startResizeLeft}
+            onDoubleClick={() => panels.setShowLeftPanel((v) => !v)}
+            title={
+              panels.showLeftPanel
+                ? 'Потягніть вліво щоб зменшити або закрити бібліотеку компонентів'
+                : 'Потягніть праворуч або двічі клацніть щоб відкрити бібліотеку компонентів'
+            }
+            className={`hidden lg:flex group w-2.5 coarse:w-4 shrink-0 select-none touch-none cursor-col-resize items-center justify-center transition-colors ${
+              panels.showLeftPanel
+                ? 'hover:bg-win-surface'
+                : 'win95-outset bg-win-surface hover:bg-win-highlight'
+            }`}
+          >
+            <div className="h-12 w-1 border-x border-win-shadow bg-win-highlight/60" />
+          </div>
+        )}
 
         {/* 2. Центральна область: ПОЛОТНО + ЛОГІЧНИЙ АНАЛІЗАТОР */}
         <div
           ref={panels.centerColumnRef}
           className={`flex-1 min-w-0 flex-col lg:overflow-hidden ${
-            panels.mobilePanelTab === 'workspace' ? 'flex' : 'hidden lg:flex'
+            panels.mobilePanelTab === 'workspace' || panels.maximizedWindow === 'workspace'
+              ? 'flex'
+              : 'hidden lg:flex'
           }`}
         >
           {panels.maximizedWindow !== 'signals' && (
@@ -745,41 +748,6 @@ export const EditorPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    aria-label="Зменшити масштаб схеми"
-                    title="Зменшити масштаб схеми"
-                    onClick={() =>
-                      setDoc((prev) => ({
-                        ...prev,
-                        viewport: {
-                          ...prev.viewport,
-                          zoom: Math.max(0.4, Number((prev.viewport.zoom - 0.1).toFixed(2))),
-                        },
-                      }))
-                    }
-                    icon={<ZoomOut className="h-3.5 w-3.5" />}
-                  />
-                  <span className="w-11 text-center text-xs font-bold tabular-nums text-win-highlight">
-                    {Math.round(doc.viewport.zoom * 100)}%
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    aria-label="Збільшити масштаб схеми"
-                    title="Збільшити масштаб схеми"
-                    onClick={() =>
-                      setDoc((prev) => ({
-                        ...prev,
-                        viewport: {
-                          ...prev.viewport,
-                          zoom: Math.min(2.0, Number((prev.viewport.zoom + 0.1).toFixed(2))),
-                        },
-                      }))
-                    }
-                    icon={<ZoomIn className="h-3.5 w-3.5" />}
-                  />
                   <button
                     type="button"
                     onClick={() => {
@@ -788,12 +756,13 @@ export const EditorPage: React.FC = () => {
                     }}
                     aria-label="Згорнути полотно схеми на користь аналізатора"
                     title="Згорнути схему та відкрити логічний аналізатор на весь екран"
-                    className="win95-button ml-1 inline-flex min-h-7 min-w-7 coarse:min-h-9 coarse:min-w-9 items-center justify-center touch-manipulation text-win-ink"
+                    className="win95-button inline-flex min-h-7 min-w-7 coarse:min-h-9 coarse:min-w-9 items-center justify-center touch-manipulation text-win-ink"
                   >
                     <Minus className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
+                    data-testid="btn-toggle-maximize-workspace"
                     onClick={() =>
                       panels.setMaximizedWindow((w) => (w === 'workspace' ? null : 'workspace'))
                     }
@@ -804,8 +773,8 @@ export const EditorPage: React.FC = () => {
                     }
                     title={
                       panels.maximizedWindow === 'workspace'
-                        ? 'Відновити розділення зі шкалою сигналів'
-                        : 'Розгорнути полотно схеми на весь екран'
+                        ? 'Відновити бічні панелі та логічний аналізатор'
+                        : 'Розгорнути полотно на весь екран (сховати всі інші панелі)'
                     }
                     className="win95-button inline-flex min-h-7 min-w-7 coarse:min-h-9 coarse:min-w-9 items-center justify-center touch-manipulation text-win-ink"
                   >
@@ -851,48 +820,50 @@ export const EditorPage: React.FC = () => {
             </section>
           )}
 
-          <div
-            data-testid="resizer-signals"
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Зміна висоти вікна логічного аналізатора"
-            onPointerDown={panels.startResizeSignal}
-            onDoubleClick={() => {
-              if (panels.maximizedWindow === 'signals') {
-                panels.setMaximizedWindow(null);
-                panels.setShowSignalPanel(true);
-              } else if (!panels.showSignalPanel || panels.maximizedWindow === 'workspace') {
-                panels.setMaximizedWindow(null);
-                panels.setShowSignalPanel(true);
-              } else {
-                panels.setShowSignalPanel(false);
+          {panels.maximizedWindow !== 'workspace' && (
+            <div
+              data-testid="resizer-signals"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Зміна висоти вікна логічного аналізатора"
+              onPointerDown={panels.startResizeSignal}
+              onDoubleClick={() => {
+                if (panels.maximizedWindow === 'signals') {
+                  panels.setMaximizedWindow(null);
+                  panels.setShowSignalPanel(true);
+                } else if (!panels.showSignalPanel) {
+                  panels.setMaximizedWindow(null);
+                  panels.setShowSignalPanel(true);
+                } else {
+                  panels.setShowSignalPanel(false);
+                }
+              }}
+              title={
+                panels.maximizedWindow === 'signals'
+                  ? 'Потягніть вниз щоб відкрити полотно схеми'
+                  : panels.showSignalPanel
+                    ? 'Потягніть вгору/вниз щоб змінити розмір, донизу щоб закрити, або догори на максимум'
+                    : 'Потягніть вгору або двічі клацніть щоб відкрити логічний аналізатор'
               }
-            }}
-            title={
-              panels.maximizedWindow === 'signals'
-                ? 'Потягніть вниз щоб відкрити полотно схеми'
-                : panels.showSignalPanel && panels.maximizedWindow !== 'workspace'
-                  ? 'Потягніть вгору/вниз щоб змінити розмір, донизу щоб закрити, або догори на максимум'
-                  : 'Потягніть вгору або двічі клацніть щоб відкрити логічний аналізатор'
-            }
-            className={`group flex shrink-0 select-none touch-none cursor-row-resize items-center justify-center transition-colors ${
-              panels.showSignalPanel && panels.maximizedWindow === null
-                ? 'h-2.5 coarse:h-4 hover:bg-win-surface'
-                : 'h-4 coarse:h-5 win95-outset bg-win-surface hover:bg-win-highlight'
-            }`}
-          >
-            {panels.maximizedWindow === 'signals' ? (
-              <span className="text-[11px] font-bold text-win-ink">
-                ▼ Потягніть вниз щоб відновити схему
-              </span>
-            ) : !panels.showSignalPanel || panels.maximizedWindow === 'workspace' ? (
-              <span className="text-[11px] font-bold text-win-ink">
-                ▲ Потягніть вгору щоб відкрити логічний аналізатор
-              </span>
-            ) : (
-              <div className="h-1 w-14 border-y border-win-shadow bg-win-highlight/60" />
-            )}
-          </div>
+              className={`group flex shrink-0 select-none touch-none cursor-row-resize items-center justify-center transition-colors ${
+                panels.showSignalPanel && panels.maximizedWindow === null
+                  ? 'h-2.5 coarse:h-4 hover:bg-win-surface'
+                  : 'h-4 coarse:h-5 win95-outset bg-win-surface hover:bg-win-highlight'
+              }`}
+            >
+              {panels.maximizedWindow === 'signals' ? (
+                <span className="text-[11px] font-bold text-win-ink">
+                  ▼ Потягніть вниз щоб відновити схему
+                </span>
+              ) : !panels.showSignalPanel ? (
+                <span className="text-[11px] font-bold text-win-ink">
+                  ▲ Потягніть вгору щоб відкрити логічний аналізатор
+                </span>
+              ) : (
+                <div className="h-1 w-14 border-y border-win-shadow bg-win-highlight/60" />
+              )}
+            </div>
+          )}
 
           {(panels.showSignalPanel || panels.maximizedWindow === 'signals') &&
             panels.maximizedWindow !== 'workspace' && (
@@ -966,28 +937,30 @@ export const EditorPage: React.FC = () => {
             )}
         </div>
 
-        <div
-          data-testid="resizer-right"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Зміна ширини панелі управління та властивостей"
-          onPointerDown={panels.startResizeRight}
-          onDoubleClick={() => panels.setShowRightPanel((v) => !v)}
-          title={
-            panels.showRightPanel
-              ? 'Потягніть вправо щоб зменшити або закрити інспектор'
-              : 'Потягніть вліво або двічі клацніть щоб відкрити інспектор'
-          }
-          className={`hidden lg:flex group w-2.5 coarse:w-4 shrink-0 select-none touch-none cursor-col-resize items-center justify-center transition-colors ${
-            panels.showRightPanel
-              ? 'hover:bg-win-surface'
-              : 'win95-outset bg-win-surface hover:bg-win-highlight'
-          }`}
-        >
-          <div className="h-12 w-1 border-x border-win-shadow bg-win-highlight/60" />
-        </div>
+        {panels.maximizedWindow !== 'workspace' && (
+          <div
+            data-testid="resizer-right"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Зміна ширини панелі управління та властивостей"
+            onPointerDown={panels.startResizeRight}
+            onDoubleClick={() => panels.setShowRightPanel((v) => !v)}
+            title={
+              panels.showRightPanel
+                ? 'Потягніть вправо щоб зменшити або закрити інспектор'
+                : 'Потягніть вліво або двічі клацніть щоб відкрити інспектор'
+            }
+            className={`hidden lg:flex group w-2.5 coarse:w-4 shrink-0 select-none touch-none cursor-col-resize items-center justify-center transition-colors ${
+              panels.showRightPanel
+                ? 'hover:bg-win-surface'
+                : 'win95-outset bg-win-surface hover:bg-win-highlight'
+            }`}
+          >
+            <div className="h-12 w-1 border-x border-win-shadow bg-win-highlight/60" />
+          </div>
+        )}
 
-        {panels.showRightPanel && (
+        {panels.showRightPanel && panels.maximizedWindow !== 'workspace' && (
           <aside
             style={{ width: `${panels.rightPanelWidth}px` }}
             className={`shrink-0 flex-col overflow-hidden max-lg:!w-full ${
