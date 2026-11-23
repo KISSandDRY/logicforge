@@ -177,7 +177,39 @@ describe('Component Library Catalog & Truth Tables', () => {
       expect(truth.inputHeaders.length).toBeGreaterThanOrEqual(1);
       expect(truth.outputHeaders.length).toBeGreaterThanOrEqual(1);
       expect(truth.rows.length).toBeGreaterThanOrEqual(1);
+      for (const row of truth.rows) {
+        expect(row.inputs).toHaveLength(truth.inputHeaders.length);
+        expect(row.outputs).toHaveLength(truth.outputHeaders.length);
+      }
     }
+
+    // Complete 2^4 = 16 truth tables for 4-input elements & 2^3 = 8 for 3-input MSI elements
+    expect(getComponentTruthTable('SEVEN_SEGMENT').rows).toHaveLength(16);
+    expect(getComponentTruthTable('PARITY_4BIT').rows).toHaveLength(16);
+    expect(getComponentTruthTable('ENCODER_4TO2').rows).toHaveLength(16);
+    expect(getComponentTruthTable('COMPARATOR_2BIT').rows).toHaveLength(16);
+    expect(getComponentTruthTable('DIP_SWITCH_4').rows).toHaveLength(16);
+    expect(getComponentTruthTable('FULL_ADDER').rows).toHaveLength(8);
+    expect(getComponentTruthTable('MUX_2TO1').rows).toHaveLength(8);
+    expect(getComponentTruthTable('DEMUX_1TO4').rows).toHaveLength(8);
+    expect(getComponentTruthTable('DECODER_2TO4').rows).toHaveLength(8);
+    expect(getComponentTruthTable('SR_LATCH').rows).toHaveLength(4);
+    expect(getComponentTruthTable('D_LATCH').rows).toHaveLength(4);
+    expect(getComponentTruthTable('COUNTER_4BIT').rows).toHaveLength(18);
+    expect(getComponentTruthTable('TIMER_555').rows[0].outputs).toEqual(['0', '0']);
+    expect(getComponentTruthTable('CUSTOM_IC').rows).toHaveLength(1);
+
+    const segInspectorHtml = renderToStaticMarkup(
+      <PropertyInspector
+        node={createNodeFromCatalog('SEVEN_SEGMENT', 'hex_test', { x: 0, y: 0 }, 'HEX')}
+        onChangeProperties={() => {}}
+      />,
+    );
+    expect(segInspectorHtml).toContain('Таблиця істинності елемента (16)');
+    expect(segInspectorHtml).toContain('0x0');
+    expect(segInspectorHtml).toContain('0xA');
+    expect(segInspectorHtml).toContain('0xF');
+
     const truth = getComponentTruthTable('INPUT_SWITCH');
     expect(truth.title).toBe('Таблиця істинності');
     expect(truth.title).not.toContain('IEEE');

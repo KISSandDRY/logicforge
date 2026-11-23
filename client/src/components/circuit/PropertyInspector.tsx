@@ -458,7 +458,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = React.memo(
         {/* Таблиця істинності обраного елемента (згорнута за замовчуванням) */}
         <details className="win95-outset p-2.5 group">
           <summary className="cursor-pointer select-none text-[11px] font-bold uppercase tracking-wide text-win-ink flex items-center justify-between gap-2 focus-visible:outline-dotted focus-visible:outline-1 focus-visible:outline-black">
-            <span>Таблиця істинності елемента</span>
+            <span>Таблиця істинності елемента ({truthSpec.rows.length})</span>
             <span className="font-mono text-[10px] text-win-muted group-open:hidden">
               ▼ Показати
             </span>
@@ -466,16 +466,16 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = React.memo(
               ▲ Сховати
             </span>
           </summary>
-          <div className="win95-inset mt-2 overflow-x-auto bg-win-highlight">
+          <div className="win95-inset mt-2 max-h-60 overflow-auto bg-win-highlight">
             <table className="w-full text-center font-mono text-[10.5px]">
-              <thead className="bg-win-surface text-win-ink border-b border-win-shadow">
+              <thead className="sticky top-0 z-10 bg-win-surface text-win-ink border-b border-win-shadow">
                 <tr>
-                  {truthSpec.inputHeaders.slice(0, 4).map((h) => (
+                  {truthSpec.inputHeaders.map((h) => (
                     <th key={h} className="px-1.5 py-1 font-bold">
                       {h}
                     </th>
                   ))}
-                  {truthSpec.outputHeaders.slice(0, 3).map((h) => (
+                  {truthSpec.outputHeaders.map((h) => (
                     <th
                       key={h}
                       className="border-l border-win-shadow bg-win-bg px-1.5 py-1 font-bold text-win-ink"
@@ -486,14 +486,14 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = React.memo(
                 </tr>
               </thead>
               <tbody className="divide-y divide-win-surface text-win-ink">
-                {truthSpec.rows.slice(0, 4).map((row, rIdx) => (
+                {truthSpec.rows.map((row, rIdx) => (
                   <tr key={rIdx}>
-                    {row.inputs.slice(0, 4).map((val, cIdx) => (
+                    {row.inputs.map((val, cIdx) => (
                       <td key={cIdx} className="px-1.5 py-1">
                         {val}
                       </td>
                     ))}
-                    {row.outputs.slice(0, 3).map((val, cIdx) => (
+                    {row.outputs.map((val, cIdx) => (
                       <td
                         key={cIdx}
                         className="border-l border-win-surface bg-win-highlight px-1.5 py-1 font-bold text-win-navy"

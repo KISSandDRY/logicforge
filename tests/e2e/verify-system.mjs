@@ -193,7 +193,12 @@ async function run() {
   const viteProc = spawn(
     'npx',
     ['vite', 'preview', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT), '--strictPort'],
-    { cwd: CLIENT_DIR, stdio: 'ignore', detached: true },
+    {
+      cwd: CLIENT_DIR,
+      stdio: 'ignore',
+      detached: true,
+      env: { ...process.env, VITE_DISABLE_API_PROXY: 'true' },
+    },
   );
 
   const chromeBin = process.env.CHROME_BIN || '/usr/sbin/chromium';
@@ -455,6 +460,36 @@ async function run() {
     })`);
     assert.equal(afterEsc.open, false);
     assert.equal(afterEsc.focusRestored, true);
+
+    // Verify full 16-row (2^4) truth table in SEVEN_SEGMENT specification modal
+    await cdp.eval(`(() => {
+      const card = document.querySelector('[data-testid="preview-symbol-SEVEN_SEGMENT"]')?.closest('article');
+      card?.querySelector('button')?.click();
+    })()`);
+    await sleep(200);
+    const hexModalCheck = await cdp.eval(`(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const tables = dialog ? Array.from(dialog.querySelectorAll('table')) : [];
+      const truthTable = tables[tables.length - 1];
+      const truthRows = truthTable ? truthTable.querySelectorAll('tbody tr').length : 0;
+      return {
+        open: Boolean(dialog),
+        hasCount16: Boolean(dialog && dialog.innerText.includes('Рядків: 16')),
+        hasHex0: Boolean(dialog && dialog.innerText.includes('0x0')),
+        hasHexF: Boolean(dialog && dialog.innerText.includes('0xF')),
+        truthRows,
+      };
+    })()`);
+    assert.equal(hexModalCheck.open, true);
+    assert.equal(
+      hexModalCheck.hasCount16,
+      true,
+      'SEVEN_SEGMENT truth table must show all 16 rows (2^4)',
+    );
+    assert.equal(hexModalCheck.truthRows, 16, 'SEVEN_SEGMENT truth table DOM must contain 16 rows');
+    assert.ok(hexModalCheck.hasHex0 && hexModalCheck.hasHexF);
+    await cdp.pressKey('Escape');
+    await sleep(100);
     console.log('PASS [3/8] Component Library CAD symbols & Single-Close Modal verified');
 
     // [4/8] "+ Нова схема" Dialog (Empty vs Template + Name) & Single Editor Win95Dropdown Switcher

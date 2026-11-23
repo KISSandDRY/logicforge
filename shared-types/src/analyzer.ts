@@ -22,22 +22,51 @@ export function synthesizeTruthTable(
   const safeMaxInputs = Number.isFinite(maxInputs)
     ? Math.max(1, Math.min(8, Math.floor(maxInputs)))
     : 6;
-  const inputNodes = doc.nodes.filter((n) => n.type === 'INPUT_SWITCH' || n.type === 'PUSH_BUTTON');
-  const outputNodes = doc.nodes.filter((n) => n.type === 'LED' || n.type === 'PROBE');
 
-  const truncated = inputNodes.length > safeMaxInputs;
-  const activeInputs = inputNodes.slice(0, safeMaxInputs);
+  interface TruthInputChannel {
+    kind: 'single' | 'dip';
+    nodeId: string;
+    bitIndex?: number;
+    label: string;
+  }
 
   const usedInNames = new Map<string, number>();
-  const inputLabels = activeInputs.map((n) => {
-    const base = (n.properties.label || n.id).trim() || n.id;
+  const allocInputLabel = (rawName: string): string => {
+    const base = rawName.trim() || 'IN';
     const seen = usedInNames.get(base) ?? 0;
     usedInNames.set(base, seen + 1);
-    return {
-      nodeId: n.id,
-      label: seen === 0 ? base : `${base}_${seen + 1}`,
-    };
-  });
+    return seen === 0 ? base : `${base}_${seen + 1}`;
+  };
+
+  const allChannels: TruthInputChannel[] = [];
+  for (const n of doc.nodes) {
+    if (n.type === 'INPUT_SWITCH' || n.type === 'PUSH_BUTTON') {
+      allChannels.push({
+        kind: 'single',
+        nodeId: n.id,
+        label: allocInputLabel(n.properties.label || n.id),
+      });
+    } else if (n.type === 'DIP_SWITCH_4') {
+      const dipBase = (n.properties.label || n.id).trim() || n.id;
+      for (let bitIdx = 0; bitIdx < 4; bitIdx++) {
+        allChannels.push({
+          kind: 'dip',
+          nodeId: n.id,
+          bitIndex: bitIdx,
+          label: allocInputLabel(`${dipBase}_Q${bitIdx}`),
+        });
+      }
+    }
+  }
+
+  const outputNodes = doc.nodes.filter((n) => n.type === 'LED' || n.type === 'PROBE');
+
+  const truncated = allChannels.length > safeMaxInputs;
+  const activeInputs = allChannels.slice(0, safeMaxInputs);
+  const inputLabels = activeInputs.map((ch) => ({
+    nodeId: ch.bitIndex !== undefined ? `${ch.nodeId}::Q${ch.bitIndex}` : ch.nodeId,
+    label: ch.label,
+  }));
 
   const usedOutNames = new Map<string, number>();
   const outputLabels = outputNodes.map((n) => {
@@ -72,11 +101,15 @@ export function synthesizeTruthTable(
     const sim = new CircuitSimulator(doc);
     const inputRecord: Record<string, LogicState> = {};
 
-    activeInputs.forEach((inpNode, bitIdx) => {
+    activeInputs.forEach((ch, bitIdx) => {
       const bitPos = activeInputs.length - 1 - bitIdx;
       const bitVal: LogicState = ((mask >> bitPos) & 1) === 1 ? '1' : '0';
-      sim.setInputState(inpNode.id, bitVal);
-      inputRecord[inputLabels[bitIdx].label] = bitVal;
+      if (ch.kind === 'dip' && ch.bitIndex !== undefined) {
+        sim.setDipSwitchBit(ch.nodeId, ch.bitIndex, bitVal);
+      } else {
+        sim.setInputState(ch.nodeId, bitVal);
+      }
+      inputRecord[ch.label] = bitVal;
     });
 
     const snap = sim.settleCombinational(600);

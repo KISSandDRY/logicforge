@@ -1070,5 +1070,10 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
     const report = generateEngineeringReport(msiDoc);
     expect(report.bom.some((b) => b.type === 'FULL_ADDER')).toBe(true);
     expect(report.bom.some((b) => b.type === 'PARITY_4BIT')).toBe(true);
+
+    const decCmpTable = synthesizeTruthTable(buildAddressDecoderComparatorPreset(), 6);
+    expect(decCmpTable.inputLabels).toHaveLength(5);
+    expect(decCmpTable.rows).toHaveLength(32);
+    expect(decCmpTable.truncated).toBe(false);
   });
 });

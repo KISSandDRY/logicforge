@@ -556,9 +556,9 @@ export const ComponentLibraryPage: React.FC = () => {
                   </div>
 
                   <div className="flex-1 p-1.5">
-                    <div className="win95-inset h-full overflow-x-auto bg-win-highlight">
+                    <div className="win95-inset max-h-[460px] overflow-auto bg-win-highlight">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-win-bg text-win-ink font-mono border-b border-win-shadow">
+                        <thead className="sticky top-0 z-10 bg-win-bg text-win-ink font-mono border-b border-win-shadow">
                           <tr>
                             {activeTruthTable.inputHeaders.map((h) => (
                               <th key={h} className="px-3 py-2 text-center font-bold">
