@@ -21,6 +21,8 @@ import {
   snapNodePosition,
 } from '../components/circuit/wireRouting';
 import { CircuitNode } from '../components/circuit/CircuitNode';
+import { CircuitCanvas } from '../components/circuit/CircuitCanvas';
+import { CatalogNodePreview } from '../components/circuit/CatalogNodePreview';
 import { NewSchemeModal } from '../components/circuit/NewSchemeModal';
 import { PropertyInspector } from '../components/circuit/PropertyInspector';
 import {
@@ -1009,5 +1011,16 @@ describe('Refactored Pages, Guest Auth Gating & Win95 Structure Verification', (
     const editorHtml = renderWithProviders(<EditorPage />, ['/editor']);
     expect(editorHtml).toContain('data-testid="btn-toggle-maximize-workspace"');
     expect(editorHtml).toContain('data-testid="canvas-zoom-reset"');
+    expect(editorHtml).toContain('[contain:layout_style_paint]');
+    expect(editorHtml).toContain('[contain:layout_paint]');
+
+    // Regression guard: heavy editor & canvas subtrees stay React.memo-wrapped so panning/viewport updates don't reconcile 37 palette SVGs
+    const memoSymbol = Symbol.for('react.memo');
+    expect((CatalogNodePreview as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
+    expect((ComponentPaletteSidebar as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
+    expect((CircuitCanvas as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
+    expect((CircuitNode as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
+    expect((PropertyInspector as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
+    expect((WaveformPanel as unknown as { $$typeof?: symbol }).$$typeof).toBe(memoSymbol);
   });
 });

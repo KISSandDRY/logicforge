@@ -127,6 +127,15 @@ export const EditorPage: React.FC = () => {
   });
 
   const panels = useEditorPanels();
+  const { setShowLeftPanel, setShowRightPanel, setMobilePanelTab } = panels;
+
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const customIcsRef = useRef(customIcs);
+  customIcsRef.current = customIcs;
+
+  const handleCloseLeftPanel = useCallback(() => setShowLeftPanel(false), [setShowLeftPanel]);
+  const handleCloseRightPanel = useCallback(() => setShowRightPanel(false), [setShowRightPanel]);
 
   const {
     simRef,
@@ -252,7 +261,10 @@ export const EditorPage: React.FC = () => {
     return opts;
   }, [activeCircuitId, circuits, doc.metadata.title, personalCircuits, presetCircuits, user]);
 
-  const timingReport = useMemo(() => analyzeCircuitGraph(doc), [doc]);
+  const timingReport = useMemo(
+    () => analyzeCircuitGraph({ nodes: doc.nodes, edges: doc.edges }),
+    [doc.nodes, doc.edges],
+  );
 
   const selectedNode = useMemo(
     () => (selectedNodeId ? (doc.nodes.find((n) => n.id === selectedNodeId) ?? null) : null),
@@ -296,42 +308,44 @@ export const EditorPage: React.FC = () => {
     return { inputs, outputs };
   }, [doc.nodes]);
 
-  const addNodeToCanvas = (
-    type: ComponentType,
-    pos?: { x: number; y: number },
-    customIcId?: string,
-  ) => {
-    const icDef = customIcId ? customIcs.find((c) => c.id === customIcId) : undefined;
-    const countOfType = doc.nodes.filter((n) => n.type === type).length + 1;
-    const meta = STANDARD_COMPONENT_CATALOG.find((c) => c.type === type);
-    const defaultPrefix = icDef ? icDef.code : (meta?.shortLabel ?? type);
-    const idStr = `n_${type.toLowerCase()}_${Date.now().toString(36).slice(-4)}`;
+  const addNodeToCanvas = useCallback(
+    (type: ComponentType, pos?: { x: number; y: number }, customIcId?: string) => {
+      const curDoc = docRef.current;
+      const curCustomIcs = customIcsRef.current;
+      const icDef = customIcId ? curCustomIcs.find((c) => c.id === customIcId) : undefined;
+      const countOfType = curDoc.nodes.filter((n) => n.type === type).length + 1;
+      const meta = STANDARD_COMPONENT_CATALOG.find((c) => c.type === type);
+      const defaultPrefix = icDef ? icDef.code : (meta?.shortLabel ?? type);
+      const idStr = `n_${type.toLowerCase()}_${Date.now().toString(36).slice(-4)}`;
 
-    const probeNode = createNodeFromCatalog(type, '_probe', { x: 0, y: 0 }, undefined, icDef);
-    const targetPos = pos ?? findFreeCanvasPlacement(doc.nodes, probeNode.width, probeNode.height);
-    const newNode = createNodeFromCatalog(
-      type,
-      idStr,
-      targetPos,
-      `${defaultPrefix}_${countOfType}`,
-      icDef,
-    );
+      const probeNode = createNodeFromCatalog(type, '_probe', { x: 0, y: 0 }, undefined, icDef);
+      const targetPos =
+        pos ?? findFreeCanvasPlacement(curDoc.nodes, probeNode.width, probeNode.height);
+      const newNode = createNodeFromCatalog(
+        type,
+        idStr,
+        targetPos,
+        `${defaultPrefix}_${countOfType}`,
+        icDef,
+      );
 
-    pushHistory((prev) => {
-      const existingDefs = prev.customDefinitions ?? [];
-      const nextDefs =
-        icDef && !existingDefs.some((d) => d.id === icDef.id)
-          ? [...existingDefs, icDef]
-          : existingDefs;
-      return {
-        ...prev,
-        nodes: [...prev.nodes, newNode],
-        customDefinitions: nextDefs.length > 0 ? nextDefs : prev.customDefinitions,
-      };
-    });
-    setSelectedNodeId(newNode.id);
-    panels.setMobilePanelTab('workspace');
-  };
+      pushHistory((prev) => {
+        const existingDefs = prev.customDefinitions ?? [];
+        const nextDefs =
+          icDef && !existingDefs.some((d) => d.id === icDef.id)
+            ? [...existingDefs, icDef]
+            : existingDefs;
+        return {
+          ...prev,
+          nodes: [...prev.nodes, newNode],
+          customDefinitions: nextDefs.length > 0 ? nextDefs : prev.customDefinitions,
+        };
+      });
+      setSelectedNodeId(newNode.id);
+      setMobilePanelTab('workspace');
+    },
+    [pushHistory, setMobilePanelTab],
+  );
 
   const handleMoveNode = useCallback((nodeId: string, pos: { x: number; y: number }) => {
     setDraggingNodePos({ nodeId, position: pos });
@@ -351,54 +365,73 @@ export const EditorPage: React.FC = () => {
     [setDoc],
   );
 
-  const handleConnectPins = (
-    sourceNodeId: string,
-    sourcePinId: string,
-    targetNodeId: string,
-    targetPinId: string,
-  ) => {
-    pushHistory((prev) => {
-      const duplicate = prev.edges.some(
-        (e) =>
-          e.sourceNodeId === sourceNodeId &&
-          e.sourcePinId === sourcePinId &&
-          e.targetNodeId === targetNodeId &&
-          e.targetPinId === targetPinId,
-      );
-      if (duplicate) return prev;
-      return {
-        ...prev,
-        edges: [
-          ...prev.edges,
-          {
-            id: `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
-            sourceNodeId,
-            sourcePinId,
-            targetNodeId,
-            targetPinId,
-            signalState: 'Z',
-          },
-        ],
-      };
-    });
-  };
-
-  const handleChangeNodeProperties = (nodeId: string, patch: Partial<NodeProperties>) => {
-    if (patch.switchState !== undefined) {
-      simRef.current.setInputState(nodeId, patch.switchState);
-    }
-    if (patch.dipSwitchStates) {
-      patch.dipSwitchStates.forEach((st, idx) => {
-        simRef.current.setDipSwitchBit(nodeId, idx, st);
+  const handleConnectPins = useCallback(
+    (sourceNodeId: string, sourcePinId: string, targetNodeId: string, targetPinId: string) => {
+      pushHistory((prev) => {
+        const duplicate = prev.edges.some(
+          (e) =>
+            e.sourceNodeId === sourceNodeId &&
+            e.sourcePinId === sourcePinId &&
+            e.targetNodeId === targetNodeId &&
+            e.targetPinId === targetPinId,
+        );
+        if (duplicate) return prev;
+        return {
+          ...prev,
+          edges: [
+            ...prev.edges,
+            {
+              id: `e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+              sourceNodeId,
+              sourcePinId,
+              targetNodeId,
+              targetPinId,
+              signalState: 'Z',
+            },
+          ],
+        };
       });
-    }
-    pushHistory((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((n) =>
-        n.id === nodeId ? { ...n, properties: { ...n.properties, ...patch } } : n,
-      ),
-    }));
-  };
+    },
+    [pushHistory],
+  );
+
+  const handleChangeNodeProperties = useCallback(
+    (nodeId: string, patch: Partial<NodeProperties>) => {
+      if (patch.switchState !== undefined) {
+        simRef.current.setInputState(nodeId, patch.switchState);
+      }
+      if (patch.dipSwitchStates) {
+        patch.dipSwitchStates.forEach((st, idx) => {
+          simRef.current.setDipSwitchBit(nodeId, idx, st);
+        });
+      }
+      pushHistory((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          n.id === nodeId ? { ...n, properties: { ...n.properties, ...patch } } : n,
+        ),
+      }));
+    },
+    [pushHistory, simRef],
+  );
+
+  const handleDropCatalogType = useCallback(
+    (dropType: ComponentType, dropPos: { x: number; y: number }, customIcId?: string) => {
+      setPendingPaletteDrag(null);
+      addNodeToCanvas(dropType, dropPos, customIcId);
+    },
+    [addNodeToCanvas],
+  );
+
+  const handleChangeViewport = useCallback(
+    (patch: Partial<(typeof doc)['viewport']>) => {
+      setDoc((prev) => ({
+        ...prev,
+        viewport: { ...prev.viewport, ...patch },
+      }));
+    },
+    [setDoc],
+  );
 
   const handleClearCanvas = () => {
     setIsRunning(false);
@@ -414,14 +447,14 @@ export const EditorPage: React.FC = () => {
     showToast('Полотно схеми очищено (Ctrl+Z для скасування).');
   };
 
-  const handleOpenTruthTable = () => {
+  const handleOpenTruthTable = useCallback(() => {
     const result = synthesizeTruthTable({
-      ...doc,
-      customDefinitions: customIcs,
+      ...docRef.current,
+      customDefinitions: customIcsRef.current,
     });
     setTruthTable(result);
     setTruthModalOpen(true);
-  };
+  }, []);
 
   const handleSaveCircuit = async () => {
     if (!user) {
@@ -678,7 +711,7 @@ export const EditorPage: React.FC = () => {
             customIcs={customIcs}
             onStartPaletteDrag={setPendingPaletteDrag}
             onAddComponent={addNodeToCanvas}
-            onClosePanel={() => panels.setShowLeftPanel(false)}
+            onClosePanel={handleCloseLeftPanel}
           />
         )}
 
@@ -803,18 +836,10 @@ export const EditorPage: React.FC = () => {
                   onMoveNode={handleMoveNode}
                   onMoveNodeEnd={handleMoveNodeEnd}
                   onConnectPins={handleConnectPins}
-                  onDropCatalogType={(dropType, dropPos, customIcId) => {
-                    setPendingPaletteDrag(null);
-                    addNodeToCanvas(dropType, dropPos, customIcId);
-                  }}
+                  onDropCatalogType={handleDropCatalogType}
                   onToggleSwitch={handleToggleSwitch}
                   onToggleDipBit={handleToggleDipBit}
-                  onChangeViewport={(patch) =>
-                    setDoc((prev) => ({
-                      ...prev,
-                      viewport: { ...prev.viewport, ...patch },
-                    }))
-                  }
+                  onChangeViewport={handleChangeViewport}
                 />
               </div>
             </section>
@@ -980,7 +1005,7 @@ export const EditorPage: React.FC = () => {
                   </span>
                   <button
                     type="button"
-                    onClick={() => panels.setShowRightPanel(false)}
+                    onClick={handleCloseRightPanel}
                     aria-label="Згорнути інспектор властивостей"
                     title="Згорнути панель (або потягніть повзунок праворуч)"
                     className="hidden lg:inline-flex win95-button min-h-6 min-w-6 coarse:min-h-9 coarse:min-w-9 items-center justify-center text-win-ink"

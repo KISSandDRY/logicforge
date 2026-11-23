@@ -975,6 +975,67 @@ async function run() {
       'Circuit wires must use straight orthogonal CAD segments without Bezier curves',
     );
 
+    // Smooth canvas viewport panning with open ComponentPaletteSidebar
+    const panSetup = await cdp.eval(`(() => {
+      const svg = document.querySelector('[data-testid="circuit-canvas"]');
+      const g = svg?.querySelector('g[transform]');
+      const paletteCount = document.querySelectorAll('[data-testid^="palette-item-"]').length;
+      if (!svg || !g) return null;
+      const rect = svg.getBoundingClientRect();
+      return {
+        paletteCount,
+        startX: Math.round(rect.left + rect.width - 40),
+        startY: Math.round(rect.top + 40),
+        initialTransform: g.getAttribute('transform') || '',
+      };
+    })()`);
+    assert.ok(panSetup && panSetup.paletteCount === 37, 'Component palette must be open during pan check');
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: panSetup.startX,
+      y: panSetup.startY,
+    });
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: panSetup.startX,
+      y: panSetup.startY,
+      button: 'left',
+      clickCount: 1,
+    });
+    for (const step of [1, 2, 3]) {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: panSetup.startX + step * 30,
+        y: panSetup.startY + step * 15,
+        button: 'left',
+      });
+      await sleep(25);
+    }
+    const midPanTransform = await cdp.eval(
+      `document.querySelector('[data-testid="circuit-canvas"] g[transform]')?.getAttribute('transform') || ''`,
+    );
+    assert.notEqual(
+      midPanTransform,
+      panSetup.initialTransform,
+      'Viewport transform must update smoothly via rAF while panning with open palette',
+    );
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: panSetup.startX + 90,
+      y: panSetup.startY + 45,
+      button: 'left',
+      clickCount: 1,
+    });
+    await sleep(80);
+    const finalPanTransform = await cdp.eval(
+      `document.querySelector('[data-testid="circuit-canvas"] g[transform]')?.getAttribute('transform') || ''`,
+    );
+    assert.equal(
+      finalPanTransform,
+      midPanTransform,
+      'Committed viewport pan transform after mouseReleased must match live rAF preview without flicker',
+    );
+
     // Reset clears Logic Analyzer empty -> clicking Start immediately captures new signals
     await cdp.eval(`document.querySelector('[data-testid="btn-reset"]')?.click()`);
     await sleep(150);

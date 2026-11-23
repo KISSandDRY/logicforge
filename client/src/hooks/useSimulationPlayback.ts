@@ -113,6 +113,17 @@ export function useSimulationPlayback({
     new CircuitSimulator(mergeDocumentCustomIcs(doc, customDefinitions)),
   );
   const loadedKeyRef = useRef<string>(circuitKey);
+  const syncedTopologyRef = useRef<{
+    nodes: CircuitDocument['nodes'];
+    edges: CircuitDocument['edges'];
+    docCustomDefs: CircuitDocument['customDefinitions'];
+    customDefs: CustomICDefinition[] | undefined;
+  }>({
+    nodes: doc.nodes,
+    edges: doc.edges,
+    docCustomDefs: doc.customDefinitions,
+    customDefs: customDefinitions,
+  });
   const autoVectorStepRef = useRef<number>(0);
   const analyzerClearedRef = useRef<boolean>(false);
   const docRef = useRef<CircuitDocument>(doc);
@@ -127,14 +138,36 @@ export function useSimulationPlayback({
 
   useEffect(() => {
     if (!syncWithDoc) return;
-    const mergedDoc = mergeDocumentCustomIcs(doc, customDefinitions);
     if (loadedKeyRef.current !== circuitKey) {
       loadedKeyRef.current = circuitKey;
+      syncedTopologyRef.current = {
+        nodes: doc.nodes,
+        edges: doc.edges,
+        docCustomDefs: doc.customDefinitions,
+        customDefs: customDefinitions,
+      };
       analyzerClearedRef.current = false;
+      const mergedDoc = mergeDocumentCustomIcs(doc, customDefinitions);
       simRef.current.loadCircuit(mergedDoc);
       setSnapshot(settleSimulatorInitial(simRef.current, mergedDoc, initialPeriodicAdvanceNs));
       setWaveforms([...simRef.current.getWaveformHistory()]);
     } else {
+      const prev = syncedTopologyRef.current;
+      if (
+        prev.nodes === doc.nodes &&
+        prev.edges === doc.edges &&
+        prev.docCustomDefs === doc.customDefinitions &&
+        prev.customDefs === customDefinitions
+      ) {
+        return;
+      }
+      syncedTopologyRef.current = {
+        nodes: doc.nodes,
+        edges: doc.edges,
+        docCustomDefs: doc.customDefinitions,
+        customDefs: customDefinitions,
+      };
+      const mergedDoc = mergeDocumentCustomIcs(doc, customDefinitions);
       const snap = simRef.current.syncCircuit(mergedDoc);
       setSnapshot(snap);
       if (!analyzerClearedRef.current) {
@@ -151,6 +184,12 @@ export function useSimulationPlayback({
     ) => {
       loadedKeyRef.current = nextKey;
       docRef.current = nextDoc;
+      syncedTopologyRef.current = {
+        nodes: nextDoc.nodes,
+        edges: nextDoc.edges,
+        docCustomDefs: nextDoc.customDefinitions,
+        customDefs: customDefinitions,
+      };
       autoVectorStepRef.current = 0;
       const merged = mergeDocumentCustomIcs(nextDoc, customDefinitions);
       simRef.current.loadCircuit(merged);
