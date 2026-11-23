@@ -1,11 +1,15 @@
-import { PrismaClient } from '@prisma/client';
-import { analyzeCircuitGraph } from '@logicforge/shared-types';
-import type {
-  CircuitDetailDTO,
-  CircuitDocument,
-  CircuitRevisionDTO,
-  CircuitSummaryDTO,
-  CustomICDefinition,
+import { PrismaClient, type Prisma } from '@prisma/client';
+import {
+  analyzeCircuitGraph,
+  buildFullAdderPreset,
+  circuitDocumentSchema,
+  customIcDefinitionSchema,
+  stripUnsafeKeys,
+  type CircuitDetailDTO,
+  type CircuitDocument,
+  type CircuitRevisionDTO,
+  type CircuitSummaryDTO,
+  type CustomICDefinition,
 } from '@logicforge/shared-types';
 import type {
   CreateCircuitInput,
@@ -14,6 +18,37 @@ import type {
   StoredUserRecord,
   UpdateCircuitInput,
 } from './types';
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return stripUnsafeKeys(JSON.parse(JSON.stringify(value))) as Prisma.InputJsonValue;
+}
+
+function parseCircuitDocFromDb(raw: Prisma.JsonValue): CircuitDocument {
+  const cleaned = stripUnsafeKeys(raw);
+  const parsed = circuitDocumentSchema.safeParse(cleaned);
+  if (parsed.success) {
+    return parsed.data as CircuitDocument;
+  }
+  return buildFullAdderPreset();
+}
+
+function parseCustomIcFromDb(raw: Prisma.JsonValue, id: string): CustomICDefinition {
+  const cleaned = stripUnsafeKeys(raw);
+  const parsed = customIcDefinitionSchema.safeParse(cleaned);
+  if (parsed.success) {
+    return { ...(parsed.data as CustomICDefinition), id };
+  }
+  return {
+    id,
+    name: 'Користувацька ІМС',
+    code: 'CUSTOM_IC',
+    description: '',
+    propagationDelayNs: 15,
+    inputPins: [],
+    outputPins: [],
+    internalCircuit: { nodes: [], edges: [] },
+  };
+}
 
 export class PrismaRepository implements IStorageRepository {
   public readonly driverName = 'postgresql-prisma' as const;
@@ -167,39 +202,45 @@ export class PrismaRepository implements IStorageRepository {
       authorName: r.author.fullName,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
-      schemaJson: r.schemaJson as unknown as CircuitDocument,
+      schemaJson: parseCircuitDocFromDb(r.schemaJson),
     };
   }
 
   public async createCircuit(input: CreateCircuitInput): Promise<CircuitDetailDTO> {
-    const created = await this.prisma.circuit.create({
-      data: {
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        isPublic: input.isPublic,
-        tags: input.tags,
-        schemaJson: JSON.parse(JSON.stringify(input.schemaJson)),
-        nodeCount: input.schemaJson.nodes.length,
-        edgeCount: input.schemaJson.edges.length,
-        criticalPathNs: input.criticalPathNs,
-        maxClockMhz: input.maxClockMhz,
-        authorId: input.authorId,
-        forkedFromId: input.forkedFromId,
-      },
-      include: { author: true },
-    });
+    const serializedSchema = toPrismaJson(input.schemaJson);
 
-    await this.prisma.circuitRevision.create({
-      data: {
-        circuitId: created.id,
-        versionNumber: 1,
-        commitMessage: input.commitMessage ?? 'Початкове створення схеми',
-        schemaJson: JSON.parse(JSON.stringify(input.schemaJson)),
-        nodeCount: input.schemaJson.nodes.length,
-        edgeCount: input.schemaJson.edges.length,
-        createdById: input.authorId,
-      },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const circuit = await tx.circuit.create({
+        data: {
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          isPublic: input.isPublic,
+          tags: input.tags,
+          schemaJson: serializedSchema,
+          nodeCount: input.schemaJson.nodes.length,
+          edgeCount: input.schemaJson.edges.length,
+          criticalPathNs: input.criticalPathNs,
+          maxClockMhz: input.maxClockMhz,
+          authorId: input.authorId,
+          forkedFromId: input.forkedFromId,
+        },
+        include: { author: true },
+      });
+
+      await tx.circuitRevision.create({
+        data: {
+          circuitId: circuit.id,
+          versionNumber: 1,
+          commitMessage: input.commitMessage ?? 'Початкове створення схеми',
+          schemaJson: serializedSchema,
+          nodeCount: input.schemaJson.nodes.length,
+          edgeCount: input.schemaJson.edges.length,
+          createdById: input.authorId,
+        },
+      });
+
+      return circuit;
     });
 
     return {
@@ -217,7 +258,7 @@ export class PrismaRepository implements IStorageRepository {
       authorName: created.author.fullName,
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
-      schemaJson: created.schemaJson as unknown as CircuitDocument,
+      schemaJson: parseCircuitDocFromDb(created.schemaJson),
     };
   }
 
@@ -225,43 +266,51 @@ export class PrismaRepository implements IStorageRepository {
     id: string,
     input: UpdateCircuitInput,
   ): Promise<CircuitDetailDTO | null> {
-    const existing = await this.prisma.circuit.findUnique({ where: { id } });
-    if (!existing) return null;
+    const serializedSchema = toPrismaJson(input.schemaJson);
 
-    const latestRev = await this.prisma.circuitRevision.findFirst({
-      where: { circuitId: id },
-      orderBy: { versionNumber: 'desc' },
-    });
-    const nextVersion = (latestRev?.versionNumber ?? 0) + 1;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.circuit.findUnique({ where: { id } });
+      if (!existing) return null;
 
-    const updated = await this.prisma.circuit.update({
-      where: { id },
-      data: {
-        title: input.title,
-        description: input.description,
-        category: input.category,
-        isPublic: input.isPublic,
-        tags: input.tags,
-        schemaJson: JSON.parse(JSON.stringify(input.schemaJson)),
-        nodeCount: input.schemaJson.nodes.length,
-        edgeCount: input.schemaJson.edges.length,
-        criticalPathNs: input.criticalPathNs,
-        maxClockMhz: input.maxClockMhz,
-      },
-      include: { author: true },
+      const latestRev = await tx.circuitRevision.findFirst({
+        where: { circuitId: id },
+        orderBy: { versionNumber: 'desc' },
+      });
+      const nextVersion = (latestRev?.versionNumber ?? 0) + 1;
+
+      const nextCircuit = await tx.circuit.update({
+        where: { id },
+        data: {
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          isPublic: input.isPublic,
+          tags: input.tags,
+          schemaJson: serializedSchema,
+          nodeCount: input.schemaJson.nodes.length,
+          edgeCount: input.schemaJson.edges.length,
+          criticalPathNs: input.criticalPathNs,
+          maxClockMhz: input.maxClockMhz,
+        },
+        include: { author: true },
+      });
+
+      await tx.circuitRevision.create({
+        data: {
+          circuitId: id,
+          versionNumber: nextVersion,
+          commitMessage: input.commitMessage ?? `Збереження ревізії #${nextVersion}`,
+          schemaJson: serializedSchema,
+          nodeCount: input.schemaJson.nodes.length,
+          edgeCount: input.schemaJson.edges.length,
+          createdById: input.editorUserId,
+        },
+      });
+
+      return nextCircuit;
     });
 
-    await this.prisma.circuitRevision.create({
-      data: {
-        circuitId: id,
-        versionNumber: nextVersion,
-        commitMessage: input.commitMessage ?? `Збереження ревізії #${nextVersion}`,
-        schemaJson: JSON.parse(JSON.stringify(input.schemaJson)),
-        nodeCount: input.schemaJson.nodes.length,
-        edgeCount: input.schemaJson.edges.length,
-        createdById: input.editorUserId,
-      },
-    });
+    if (!updated) return null;
 
     return {
       id: updated.id,
@@ -278,7 +327,7 @@ export class PrismaRepository implements IStorageRepository {
       authorName: updated.author.fullName,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
-      schemaJson: updated.schemaJson as unknown as CircuitDocument,
+      schemaJson: parseCircuitDocFromDb(updated.schemaJson),
     };
   }
 
@@ -306,7 +355,7 @@ export class PrismaRepository implements IStorageRepository {
       edgeCount: r.edgeCount,
       authorName: r.createdBy.fullName,
       createdAt: r.createdAt.toISOString(),
-      schemaJson: r.schemaJson as unknown as CircuitDocument,
+      schemaJson: parseCircuitDocFromDb(r.schemaJson),
     }));
   }
 
@@ -328,7 +377,7 @@ export class PrismaRepository implements IStorageRepository {
       edgeCount: r.edgeCount,
       authorName: r.createdBy.fullName,
       createdAt: r.createdAt.toISOString(),
-      schemaJson: r.schemaJson as unknown as CircuitDocument,
+      schemaJson: parseCircuitDocFromDb(r.schemaJson),
     };
   }
 
@@ -363,10 +412,7 @@ export class PrismaRepository implements IStorageRepository {
         : { isShared: true },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => ({
-      ...(r.definitionJson as unknown as CustomICDefinition),
-      id: r.id,
-    }));
+    return rows.map((r) => parseCustomIcFromDb(r.definitionJson, r.id));
   }
 
   public async createCustomComponent(
@@ -374,23 +420,57 @@ export class PrismaRepository implements IStorageRepository {
     def: Omit<CustomICDefinition, 'id'>,
     isShared: boolean,
   ): Promise<CustomICDefinition> {
-    const created = await this.prisma.customComponent.create({
-      data: {
-        name: def.name,
-        code: def.code,
-        description: def.description,
-        propagationDelayNs: def.propagationDelayNs,
-        definitionJson: JSON.parse(JSON.stringify({ ...def, id: 'pending' })),
-        isShared,
-        authorId,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.customComponent.create({
+        data: {
+          name: def.name,
+          code: def.code,
+          description: def.description,
+          propagationDelayNs: def.propagationDelayNs,
+          definitionJson: toPrismaJson({ ...def, id: 'pending' }),
+          isShared,
+          authorId,
+        },
+      });
+      const finalDef: CustomICDefinition = { ...def, id: created.id };
+      await tx.customComponent.update({
+        where: { id: created.id },
+        data: { definitionJson: toPrismaJson(finalDef) },
+      });
+      return finalDef;
     });
-    const finalDef: CustomICDefinition = { ...def, id: created.id };
-    await this.prisma.customComponent.update({
-      where: { id: created.id },
-      data: { definitionJson: JSON.parse(JSON.stringify(finalDef)) },
+  }
+
+  public async updateCustomComponent(
+    id: string,
+    userId: string,
+    patch: Partial<Omit<CustomICDefinition, 'id'>> & { isShared?: boolean },
+  ): Promise<CustomICDefinition | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const found = await tx.customComponent.findUnique({ where: { id } });
+      if (!found || found.authorId !== userId) return null;
+
+      const { isShared, ...defPatch } = patch;
+      const prevDef = parseCustomIcFromDb(found.definitionJson, found.id);
+      const nextDef: CustomICDefinition = {
+        ...prevDef,
+        ...(stripUnsafeKeys(defPatch) as Partial<CustomICDefinition>),
+        id: found.id,
+      };
+
+      await tx.customComponent.update({
+        where: { id },
+        data: {
+          name: nextDef.name,
+          code: nextDef.code,
+          description: nextDef.description,
+          propagationDelayNs: nextDef.propagationDelayNs,
+          isShared: isShared ?? found.isShared,
+          definitionJson: toPrismaJson(nextDef),
+        },
+      });
+      return nextDef;
     });
-    return finalDef;
   }
 
   public async deleteCustomComponent(id: string, userId: string): Promise<boolean> {

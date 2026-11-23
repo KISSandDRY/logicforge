@@ -1,159 +1,90 @@
 import { z } from 'zod';
+import {
+  CIRCUIT_LIMITS,
+  circuitDocumentSchema,
+  circuitEdgeSchema,
+  circuitNodeSchema,
+  componentTypeSchema,
+  customIcDefinitionSchema,
+  customIcPinMappingSchema,
+  logicStateSchema,
+  pinDefinitionSchema,
+  pinOffsetSchema,
+} from '@logicforge/shared-types';
 
-export const logicStateSchema = z.enum(['0', '1', 'Z', 'X']);
+export {
+  circuitDocumentSchema,
+  circuitEdgeSchema,
+  circuitNodeSchema,
+  componentTypeSchema,
+  customIcDefinitionSchema,
+  customIcPinMappingSchema,
+  logicStateSchema,
+  pinDefinitionSchema,
+  pinOffsetSchema,
+};
 
-export const pinOffsetSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-  side: z.enum(['LEFT', 'RIGHT', 'TOP', 'BOTTOM']),
-});
+export const idParamSchema = z
+  .string()
+  .trim()
+  .min(1, 'Ідентифікатор не може бути порожнім')
+  .max(128, 'Ідентифікатор занадто довгий')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Некоректний формат ідентифікатора');
 
-export const pinDefinitionSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  direction: z.enum(['INPUT', 'OUTPUT']),
-  offset: pinOffsetSchema,
-  inverted: z.boolean().optional(),
-  clockEdge: z.boolean().optional(),
-  state: logicStateSchema,
-});
+export const versionParamSchema = z.coerce.number().int().min(1).max(100000);
 
-export const circuitNodeSchema = z.object({
-  id: z.string().min(1),
-  type: z.enum([
-    'INPUT_SWITCH',
-    'PUSH_BUTTON',
-    'CLOCK',
-    'CONST_HIGH',
-    'CONST_LOW',
-    'AND',
-    'OR',
-    'NOT',
-    'NAND',
-    'NOR',
-    'XOR',
-    'XNOR',
-    'TRI_BUFFER',
-    'SR_LATCH',
-    'D_FLIPFLOP',
-    'JK_FLIPFLOP',
-    'COUNTER_4BIT',
-    'TIMER_555',
-    'MUX_4TO1',
-    'ALU_4BIT',
-    'CUSTOM_IC',
-    'LED',
-    'PROBE',
-    'SEVEN_SEGMENT',
-  ]),
-  position: z.object({
-    x: z.number(),
-    y: z.number(),
-  }),
-  rotation: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).optional(),
-  width: z.number().positive(),
-  height: z.number().positive(),
-  pins: z.array(pinDefinitionSchema),
-  properties: z
-    .object({
-      label: z.string(),
-      propagationDelayNs: z.number().min(0).max(10000),
-      switchState: logicStateSchema.optional(),
-      frequencyHz: z.number().optional(),
-      halfPeriodNs: z.number().optional(),
-      resistanceR1Ohms: z.number().optional(),
-      resistanceR2Ohms: z.number().optional(),
-      capacitanceUf: z.number().optional(),
-      astableAutoTrigger: z.boolean().optional(),
-      ledColor: z.enum(['emerald', 'red', 'amber', 'cyan', 'violet']).optional(),
-      customIcId: z.string().optional(),
-      notes: z.string().optional(),
-    })
-    .passthrough(),
-});
-
-export const circuitEdgeSchema = z.object({
-  id: z.string().min(1),
-  sourceNodeId: z.string().min(1),
-  sourcePinId: z.string().min(1),
-  targetNodeId: z.string().min(1),
-  targetPinId: z.string().min(1),
-  signalState: logicStateSchema,
-  waypoints: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
-});
-
-export const circuitDocumentSchema = z.object({
-  metadata: z.object({
-    schemaVersion: z.literal('1.0.0'),
-    title: z.string().min(1).max(200),
-    description: z.string().max(2000),
-    category: z.string().min(1).max(100),
-    tags: z.array(z.string()),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  }),
-  viewport: z.object({
-    panX: z.number(),
-    panY: z.number(),
-    zoom: z.number().min(0.1).max(5),
-    gridSnap: z.boolean(),
-  }),
-  nodes: z.array(circuitNodeSchema),
-  edges: z.array(circuitEdgeSchema),
-  customDefinitions: z.array(z.any()).optional(),
+export const listCircuitsQuerySchema = z.object({
+  search: z.string().trim().max(100).optional(),
+  category: z.string().trim().max(100).optional(),
+  mine: z.enum(['true', 'false']).optional(),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email('Некоректний формат email'),
-  username: z.string().min(3).max(40),
-  fullName: z.string().min(2).max(100),
-  password: z.string().min(6, 'Пароль має містити щонайменше 6 символів'),
+  email: z.email('Некоректний формат email').max(254),
+  username: z
+    .string()
+    .trim()
+    .min(3, 'Логін має містити щонайменше 3 символи')
+    .max(40, 'Логін не може перевищувати 40 символів')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'Дозволені лише латинські літери, цифри, _, - та крапка'),
+  fullName: z.string().trim().min(2).max(100),
+  password: z.string().min(6, 'Пароль має містити щонайменше 6 символів').max(128),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.email('Некоректний формат email').max(254),
+  password: z.string().min(1).max(128),
 });
 
 export const saveCircuitRequestSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).default(''),
-  category: z.string().min(1).max(100).default('Комбінаційні схеми'),
+  title: z.string().trim().min(1).max(CIRCUIT_LIMITS.MAX_TITLE_LENGTH),
+  description: z.string().trim().max(CIRCUIT_LIMITS.MAX_DESCRIPTION_LENGTH).default(''),
+  category: z.string().trim().min(1).max(100).default('Комбінаційні схеми'),
   isPublic: z.boolean().default(true),
-  tags: z.array(z.string()).default([]),
-  commitMessage: z.string().min(1).max(300).optional(),
+  tags: z.array(z.string().trim().max(50)).max(CIRCUIT_LIMITS.MAX_TAGS).default([]),
+  commitMessage: z.string().trim().min(1).max(300).optional(),
   schemaJson: circuitDocumentSchema,
 });
 
 export const createCustomIcRequestSchema = z.object({
-  name: z.string().min(2).max(120),
-  code: z.string().min(2).max(24),
-  description: z.string().max(1000).default(''),
-  propagationDelayNs: z.number().min(1).max(1000).default(15),
+  name: z.string().trim().min(2).max(120),
+  code: z.string().trim().min(2).max(24),
+  description: z.string().trim().max(1000).default(''),
+  propagationDelayNs: z.number().finite().min(1).max(1000).default(15),
   isShared: z.boolean().default(true),
-  inputPins: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-      mappedNodeId: z.string().min(1),
-    }),
-  ),
-  outputPins: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-      mappedNodeId: z.string().min(1),
-    }),
-  ),
+  inputPins: z.array(customIcPinMappingSchema).max(CIRCUIT_LIMITS.MAX_PINS_PER_NODE),
+  outputPins: z.array(customIcPinMappingSchema).max(CIRCUIT_LIMITS.MAX_PINS_PER_NODE),
   internalCircuit: z.object({
-    nodes: z.array(circuitNodeSchema),
-    edges: z.array(circuitEdgeSchema),
+    nodes: z.array(circuitNodeSchema).max(CIRCUIT_LIMITS.MAX_NODES),
+    edges: z.array(circuitEdgeSchema).max(CIRCUIT_LIMITS.MAX_EDGES),
   }),
 });
 
+export const updateCustomIcRequestSchema = createCustomIcRequestSchema.partial();
+
 export const simulateRequestSchema = z.object({
-  circuitId: z.string().optional(),
+  circuitId: idParamSchema.optional(),
   document: circuitDocumentSchema,
-  durationNs: z.number().min(1).max(10000).default(200),
-  maxTruthTableInputs: z.number().min(1).max(6).default(5),
+  durationNs: z.number().finite().min(1).max(10000).default(200),
+  maxTruthTableInputs: z.number().int().min(1).max(6).default(5),
 });

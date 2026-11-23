@@ -1,6 +1,10 @@
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { buildFullAdderPreset, buildTriStateBusPreset } from '@logicforge/shared-types';
+import {
+  buildAddressDecoderComparatorPreset,
+  buildFullAdderPreset,
+  buildTriStateBusPreset,
+} from '@logicforge/shared-types';
 import { createApp } from '../app';
 import { initializeRepository } from '../repositories';
 
@@ -136,10 +140,263 @@ describe('LogicForge REST API Integration Tests (Supertest)', () => {
   it('returns component catalog and manages custom IC subcircuits', async () => {
     const catRes = await request(app).get('/api/components/catalog');
     expect(catRes.status).toBe(200);
-    expect(catRes.body.components.length).toBeGreaterThanOrEqual(20);
+    expect(catRes.body.components).toHaveLength(32);
 
     const customList = await request(app).get('/api/components/custom');
     expect(customList.status).toBe(200);
     expect(customList.body.customComponents.length).toBeGreaterThanOrEqual(1);
+
+    // Create, update (edit), and delete a user Custom IC via REST API
+    const haSeed = customList.body.customComponents[0];
+    const createIcRes = await request(app)
+      .post('/api/components/custom')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Користувацький напівсуматор Тест',
+        code: 'HA_USR',
+        description: 'Початковий опис ІМС',
+        propagationDelayNs: 18,
+        isShared: true,
+        inputPins: haSeed.inputPins,
+        outputPins: haSeed.outputPins,
+        internalCircuit: haSeed.internalCircuit,
+      });
+    expect(createIcRes.status).toBe(201);
+    const newIcId = createIcRes.body.customComponent.id as string;
+
+    const editIcRes = await request(app)
+      .put(`/api/components/custom/${newIcId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Оновлений напівсуматор v2',
+        code: 'HA_V2',
+        description: 'Оновлений опис після редагування',
+        propagationDelayNs: 12,
+      });
+    expect(editIcRes.status).toBe(200);
+    expect(editIcRes.body.customComponent.name).toBe('Оновлений напівсуматор v2');
+    expect(editIcRes.body.customComponent.code).toBe('HA_V2');
+    expect(editIcRes.body.customComponent.propagationDelayNs).toBe(12);
+
+    const delIcRes = await request(app)
+      .delete(`/api/components/custom/${newIcId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(delIcRes.status).toBe(200);
+
+    // Validate saving and simulating circuit with new DIP_SWITCH_4, DECODER_2TO4, and COMPARATOR_2BIT components
+    const decDoc = buildAddressDecoderComparatorPreset();
+    const saveDecRes = await request(app)
+      .post('/api/circuits')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: decDoc.metadata.title,
+        description: decDoc.metadata.description,
+        category: decDoc.metadata.category,
+        isPublic: true,
+        tags: decDoc.metadata.tags,
+        commitMessage: 'Ревізія 1: Дешифратор та компаратор',
+        schemaJson: decDoc,
+      });
+    expect(saveDecRes.status).toBe(201);
+  });
+
+  it('enforces security headers, CORS allowlist, input validation, HttpOnly cookies, rate limiting, and cross-user IDOR isolation', async () => {
+    // 1. Security headers + health + disallowed CORS origin blocking
+    const healthRes = await request(app).get('/api/health');
+    expect(healthRes.headers['x-content-type-options']).toBe('nosniff');
+    expect(healthRes.headers['x-frame-options']).toBe('DENY');
+    expect(healthRes.headers['content-security-policy']).toBeDefined();
+    expect(healthRes.headers['referrer-policy']).toBeDefined();
+
+    const badCorsRes = await request(app)
+      .get('/api/health')
+      .set('Origin', 'https://evil.example.com');
+    expect(badCorsRes.status).toBe(403);
+    expect(badCorsRes.headers['access-control-allow-origin']).toBeUndefined();
+
+    // 2. Malformed inputs & unauthenticated gates
+    const unauthMe = await request(app).get('/api/auth/me');
+    expect(unauthMe.status).toBe(401);
+
+    const badIdRes = await request(app).get('/api/circuits/bad..id$space');
+    expect(badIdRes.status).toBe(400);
+
+    const malformedJsonRes = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{"broken":');
+    expect(malformedJsonRes.status).toBe(400);
+
+    const badRegRes = await request(app).post('/api/auth/register').send({
+      email: 'not-an-email',
+      username: 'x',
+      fullName: 'A',
+      password: '123',
+    });
+    expect(badRegRes.status).toBe(400);
+
+    // 3. HttpOnly + SameSite=Strict cookie session & no passwordHash leakage
+    const loginCookieRes = await request(app).post('/api/auth/login').send({
+      email: 'ivan.petrenko@lpnu.ua',
+      password: 'SecurePassword123',
+    });
+    expect(loginCookieRes.status).toBe(200);
+    expect(loginCookieRes.body.user.passwordHash).toBeUndefined();
+    const cookies = loginCookieRes.headers['set-cookie'] as unknown as string[] | undefined;
+    expect(cookies && cookies.length > 0).toBe(true);
+    expect(cookies![0]).toContain('HttpOnly');
+    expect(cookies![0]).toContain('SameSite=Strict');
+
+    const cookieMeRes = await request(app).get('/api/auth/me').set('Cookie', cookies!);
+    expect(cookieMeRes.status).toBe(200);
+    expect(cookieMeRes.body.user.passwordHash).toBeUndefined();
+
+    const logoutRes = await request(app).post('/api/auth/logout');
+    expect(logoutRes.status).toBe(200);
+
+    // 4. Cross-user IDOR isolation across circuits, revisions, reports, simulation runs & custom ICs
+    const ownerDoc = buildFullAdderPreset();
+    const privCircuitRes = await request(app)
+      .post('/api/circuits')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: 'Приватна закрита схема Івана',
+        description: 'Секретна архітектура АЛП',
+        category: 'Комбінаційні схеми',
+        isPublic: false,
+        tags: ['private'],
+        schemaJson: ownerDoc,
+      });
+    expect(privCircuitRes.status).toBe(201);
+    const privId = privCircuitRes.body.circuit.id as string;
+
+    const privIcRes = await request(app)
+      .post('/api/components/custom')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        name: 'Приватна ІМС Івана',
+        code: 'PRIV_IC',
+        description: 'Закритий компонент',
+        propagationDelayNs: 15,
+        isShared: false,
+        inputPins: [{ id: 'A', name: 'A', mappedNodeId: 'n_sw_a' }],
+        outputPins: [{ id: 'Y', name: 'Y', mappedNodeId: 'n_led_sum' }],
+        internalCircuit: { nodes: [], edges: [] },
+      });
+    expect(privIcRes.status).toBe(201);
+    const privIcId = privIcRes.body.customComponent.id as string;
+
+    // Second user (Attacker / User B) registers
+    const userBReg = await request(app).post('/api/auth/register').send({
+      email: 'attacker@lpnu.ua',
+      username: 'user_b',
+      fullName: 'Користувач Б',
+      password: 'OtherPassword123',
+    });
+    expect(userBReg.status).toBe(201);
+    const tokenB = userBReg.body.token as string;
+
+    // User B MUST be blocked on every IDOR vector
+    expect(
+      (await request(app).get(`/api/circuits/${privId}`).set('Authorization', `Bearer ${tokenB}`))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .put(`/api/circuits/${privId}`)
+          .set('Authorization', `Bearer ${tokenB}`)
+          .send({
+            title: 'Перезаписано IDOR',
+            description: 'hack',
+            category: 'Комбінаційні схеми',
+            isPublic: true,
+            tags: [],
+            schemaJson: ownerDoc,
+          })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .put(`/api/circuits/${createdCircuitId}`)
+          .set('Authorization', `Bearer ${tokenB}`)
+          .send({
+            title: 'Чужа публічна схема',
+            description: 'idor edit',
+            category: 'Комбінаційні схеми',
+            isPublic: true,
+            tags: [],
+            schemaJson: ownerDoc,
+          })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post(`/api/circuits/${privId}/fork`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .delete(`/api/circuits/${privId}`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .get(`/api/circuits/${privId}/revisions`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post(`/api/circuits/${privId}/revisions/1/restore`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .get(`/api/circuits/${privId}/report`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post('/api/simulate/run')
+          .set('Authorization', `Bearer ${tokenB}`)
+          .send({ circuitId: privId, document: ownerDoc, durationNs: 100 })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .put(`/api/components/custom/${privIcId}`)
+          .set('Authorization', `Bearer ${tokenB}`)
+          .send({ name: 'Зламано ІМС' })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(app)
+          .delete(`/api/components/custom/${privIcId}`)
+          .set('Authorization', `Bearer ${tokenB}`)
+      ).status,
+    ).toBe(404);
+
+    // 5. Rate limiting on /api/auth/login
+    const strictApp = createApp({ authRateLimitMax: 2 });
+    await request(strictApp).post('/api/auth/login').send({ email: 'a@b.ua', password: '123' });
+    await request(strictApp).post('/api/auth/login').send({ email: 'a@b.ua', password: '123' });
+    const throttled = await request(strictApp)
+      .post('/api/auth/login')
+      .send({ email: 'a@b.ua', password: '123' });
+    expect(throttled.status).toBe(429);
   });
 });

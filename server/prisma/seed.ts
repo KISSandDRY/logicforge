@@ -10,7 +10,7 @@ import {
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
-  const passwordHash = await bcrypt.hash('DemoPass123!', 10);
+  const passwordHash = await bcrypt.hash('DemoPass123!', 12);
 
   const demoUser = await prisma.user.upsert({
     where: { email: 'student@lpnu.ua' },

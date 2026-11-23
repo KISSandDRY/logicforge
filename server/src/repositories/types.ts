@@ -88,6 +88,11 @@ export interface IStorageRepository {
     def: Omit<CustomICDefinition, 'id'>,
     isShared: boolean,
   ): Promise<CustomICDefinition>;
+  updateCustomComponent(
+    id: string,
+    userId: string,
+    patch: Partial<Omit<CustomICDefinition, 'id'>> & { isShared?: boolean },
+  ): Promise<CustomICDefinition | null>;
   deleteCustomComponent(id: string, userId: string): Promise<boolean>;
 
   recordSimulationRun(

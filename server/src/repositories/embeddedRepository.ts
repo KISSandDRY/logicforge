@@ -47,6 +47,23 @@ export class EmbeddedRepository implements IStorageRepository {
       try {
         const raw = fs.readFileSync(this.persistFilePath, 'utf8');
         this.store = JSON.parse(raw) as EmbeddedStoreData;
+        const seeded = this.createSeededStore();
+        let updated = false;
+        for (const presetCircuit of seeded.circuits) {
+          if (!this.store.circuits.some((c) => c.id === presetCircuit.id)) {
+            this.store.circuits.push(presetCircuit);
+            updated = true;
+          }
+        }
+        for (const presetRev of seeded.revisions) {
+          if (!this.store.revisions.some((r) => r.id === presetRev.id)) {
+            this.store.revisions.push(presetRev);
+            updated = true;
+          }
+        }
+        if (updated) {
+          this.flush();
+        }
         return;
       } catch {
         // Fallback to fresh seed if file is corrupted
@@ -68,14 +85,14 @@ export class EmbeddedRepository implements IStorageRepository {
 
   private createSeededStore(): EmbeddedStoreData {
     const demoUserId = 'u-demo-lpnu-001';
-    const passwordHash = bcrypt.hashSync('DemoPass123!', 8);
+    const passwordHash = bcrypt.hashSync('DemoPass123!', 12);
     const now = '2026-11-06T12:00:00.000Z';
 
     const demoUser: StoredUserRecord = {
       id: demoUserId,
       email: 'student@lpnu.ua',
       username: 'lpnu_engineer',
-      fullName: 'Студент Кафедри АСУ',
+      fullName: 'Інженер-схемотехнік',
       role: 'STUDENT',
       passwordHash,
       createdAt: now,
@@ -465,6 +482,29 @@ export class EmbeddedRepository implements IStorageRepository {
     });
     this.flush();
     return created;
+  }
+
+  public async updateCustomComponent(
+    id: string,
+    userId: string,
+    patch: Partial<Omit<CustomICDefinition, 'id'>> & { isShared?: boolean },
+  ): Promise<CustomICDefinition | null> {
+    const entry = this.store.customComponents.find(
+      (c) => c.definition.id === id && c.authorId === userId,
+    );
+    if (!entry) return null;
+
+    const { isShared, ...defPatch } = patch;
+    entry.definition = {
+      ...entry.definition,
+      ...JSON.parse(JSON.stringify(defPatch)),
+      id: entry.definition.id,
+    };
+    if (isShared !== undefined) {
+      entry.isShared = isShared;
+    }
+    this.flush();
+    return JSON.parse(JSON.stringify(entry.definition));
   }
 
   public async deleteCustomComponent(id: string, userId: string): Promise<boolean> {
