@@ -4,9 +4,9 @@ services:
     container_name: logicforge-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: logicforge
-      POSTGRES_PASSWORD: logicforge_secret
-      POSTGRES_DB: logicforge_db
+      POSTGRES_USER: ${POSTGRES_USER:-logicforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME_DEV_ONLY}
+      POSTGRES_DB: ${POSTGRES_DB:-logicforge_db}
     ports:
       - '5432:5432'
     volumes:
@@ -29,9 +29,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: postgresql://logicforge:logicforge_secret@postgres:5432/logicforge_db?schema=public
-      JWT_SECRET: logicforge-docker-jwt-secret-2026
-      CORS_ORIGIN: http://localhost:8080,http://localhost:5173
+      DATABASE_URL: ${DATABASE_URL:-postgresql://logicforge:CHANGE_ME_DEV_ONLY@postgres:5432/logicforge_db?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-replace-with-strong-32-char-random-docker-secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080,http://localhost:5173}
     ports:
       - '4000:4000'
 

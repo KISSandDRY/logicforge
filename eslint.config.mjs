@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
+import unusedImports from 'eslint-plugin-unused-imports';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -11,6 +12,9 @@ export default tseslint.config(
       '**/coverage/**',
       '**/build/**',
       'server/.data/**',
+      '.agents/**',
+      '.impeccable/**',
+      'client/.impeccable/**',
     ],
   },
   {
@@ -25,12 +29,22 @@ export default tseslint.config(
     },
     plugins: {
       'react-hooks': reactHooks,
+      'unused-imports': unusedImports,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': [
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'unused-imports/no-unused-imports': 'error',
+      'unused-imports/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        {
+          vars: 'all',
+          varsIgnorePattern: '^_',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
       ],
       '@typescript-eslint/consistent-type-imports': 'error',
     },

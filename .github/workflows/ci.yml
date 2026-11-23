@@ -6,20 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
+    name: Quality, Security Audit, Tests & Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 with npm cache
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Install dependencies
+
+      - name: Install dependencies cleanly
         run: npm ci
-      - name: Install codespell
-        run: pip install codespell
+
       - name: Generate Prisma client
         run: npm run db:generate
-      - name: Run spellcheck, format, lint, typecheck, tests and build
-        run: npm run check
+
+      - name: TypeScript typecheck across workspaces
+        run: npm run typecheck
+
+      - name: ESLint static analysis
+        run: npm run lint
+
+      - name: Prettier formatting verification
+        run: npm run format:check
+
+      - name: Install codespell
+        run: pip install codespell
+
+      - name: Codespell check (code, tests & docs)
+        run: npm run spellcheck
+
+      - name: Run full unit & API integration test suites
+        run: npm run test
+
+      - name: Security dependency audit (high/critical)
+        run: npm audit --audit-level=high
+
+      - name: Production build across all packages
+        run: npm run build

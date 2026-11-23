@@ -16,7 +16,8 @@
     "dev": "concurrently -n SHARED,SERVER,CLIENT -c cyan,green,magenta \"npm run dev -w @logicforge/shared-types\" \"npm run dev -w @logicforge/server\" \"npm run dev -w @logicforge/client\"",
     "build": "npm run build -w @logicforge/shared-types && npm run build -w @logicforge/server && npm run build -w @logicforge/client",
     "start": "npm run start -w @logicforge/server",
-    "test": "npm run build -w @logicforge/shared-types && npm run test -w @logicforge/shared-types && npm run test -w @logicforge/server",
+    "test": "npm run build -w @logicforge/shared-types && npm run test -w @logicforge/shared-types && npm run test -w @logicforge/server && npm run test -w @logicforge/client",
+    "test:e2e": "node tests/e2e/verify-system.mjs",
     "test:coverage": "npm run build -w @logicforge/shared-types && npm run test:coverage -w @logicforge/shared-types",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -35,17 +36,21 @@
     "concurrently": "^9.1.0",
     "eslint": "^9.15.0",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
     "globals": "^15.12.0",
     "prettier": "^3.4.1",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.16.0"
+    "typescript-eslint": "^8.73.0"
   },
   "allowScripts": {
+    "@prisma/client@6.12.0": true,
+    "@prisma/engines@6.12.0": true,
     "@prisma/client@6.19.3": true,
     "@prisma/engines@6.19.3": true,
     "esbuild@0.28.2": true,
     "esbuild@0.21.5": true,
     "esbuild@0.25.12": true,
+    "prisma@6.12.0": true,
     "prisma@6.19.3": true
   }
 }

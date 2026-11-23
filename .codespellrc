@@ -1,4 +1,4 @@
 [codespell]
-skip = ./node_modules,./package-lock.json,./*/dist,./*/coverage,./.git,./server/.data,./server/logs
-ignore-words-list = crate,nd,inout,thist,pres,ser,te,vas
+skip = ./node_modules,./client/node_modules,./server/node_modules,./shared-types/node_modules,*/node_modules/*,./package-lock.json,./*/dist,./*/coverage,./*/build,./.git,./server/.data,./server/logs,./.agents,./.impeccable,./client/.impeccable
+ignore-words-list = crate,nd,inout,thist,pres,ser,te,vas,netlist,topological,ddnf,imc,alp,соп,дднф,імс,алп,нс,вх,вих
 check-filenames = true

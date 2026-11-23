@@ -8,19 +8,18 @@ build/
 coverage/
 *.tsbuildinfo
 
-# Environment variables
+# Environment variables (keep template .env.example files tracked)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+!server/.env.example
 
 # Runtime & embedded dev database data
 server/.data/
 server/logs/
 *.log
 
-# Editor & OS files
+# Editor, IDE & OS files
 .DS_Store
 Thumbs.db
 *.swp
@@ -29,3 +28,9 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/settings.json
+
+# Local AI UI-review skill & session artifacts
+.agents/
+.codex/
+.impeccable/
+client/.impeccable/

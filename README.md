@@ -144,30 +144,41 @@ $$\mathcal{R}(S) = \begin{cases} Z, & \text{якщо } S = \emptyset \lor \foral
 
 ---
 
-## 4. Інтеграція з Neovim, лінтерами та перевіркою якості коду
+## 4. Інструменти якості коду, безпека та CI/CD
 
-Репозиторій містить повний набір конфігурацій для комфортної роботи в **Neovim** (`nvim-lspconfig`, `conform.nvim`, `nvim-lint`):
+### Безпека системи (Security Hardening)
 
-- `.editorconfig` — автоматичне налаштування відступів (2 пробіли, UTF-8, LF) у Neovim 0.9+.
-- `eslint.config.js` — ESLint 9 Flat Config (`typescript-eslint` + `eslint-plugin-react-hooks`).
+- **HTTP-заголовки та CORS**: `helmet` з політикою CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`; явний список дозволених джерел `CORS_ORIGIN` без wildcard `*` у production.
+- **Rate Limiting та захист від DoS**: окремі обмежувачі запитів (`express-rate-limit`) для маршрутів автентифікації (`/api/auth/login`, `/register`, `/demo`) та мутуючих операцій (`POST/PUT/DELETE`), обмеження JSON payload до `1 MB` і ліміти на кількість вузлів/ліній (`250`/`600`).
+- **Автентифікація та IDOR-захист**: адаптивне гешування паролів `bcrypt` (cost factor $\ge 12$), явна перевірка алгоритму `HS256` + `iss`/`aud` + термін дії JWT, сесійні cookie `HttpOnly; SameSite=Strict` (+ `Secure` у production), валідація секретів на старті (`config.ts`) та сувора перевірка прав власника (`authorId`) на всіх маршрутах схем, ревізій і Custom IC.
+- **Санітизація JSON та захист від XSS**: спільний валідатор `sanitizeAndValidateCircuitDocument` видаляє небезпечні ключі (`__proto__`, `constructor`, `prototype`), обмежує глибину/кількість об’єктів та перевіряє всі посилання виводів `edges -> pins`; UI рендерить текстові мітки виключно через безпечні вузли React.
+
+### Стандартизовані інструменти розробки та команди `package.json`
+
+Репозиторій містить конфігурації для **Neovim**, **ESLint 9**, **Prettier**, **Codespell**, **Git** та **GitHub Actions** (`.github/workflows/ci.yml`):
+
+- `.editorconfig` та `.gitattributes` — єдині відступи (2 пробіли, UTF-8) та нормалізація перенесень рядків `LF`.
+- `eslint.config.mjs` — ESLint 9 Flat Config (`typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-unused-imports`, заборона `any`).
 - `.prettierrc.json` — єдиний стандарт форматування коду.
-- `.codespellrc` — автоматична перевірка орфографії у вихідному коді та документації через `codespell`.
-- `.nvim.lua` — локальні налаштування буфера проєкту.
-
-### Стандартизовані команди `package.json`
+- `.codespellrc` — автоматична перевірка орфографії (`codespell`) з ігноруванням доменних термінів (ДДНФ, ІМС, АЛП, `netlist`, `topological` тощо).
+- `.env.example` та `server/.env.example` — шаблонні змінні середовища без секретів у Git.
 
 ```bash
-npm install            # Встановлення всіх залежностей монорепозиторію
-npm run dev            # Одночасний запуск shared-types, REST API (4000) та Vite клієнта (5173)
-npm run build          # Повна виробнича збірка всіх пакетів
-npm run test           # Запуск модульних тестів Vitest (ядро) та інтеграційних Supertest (API)
-npm run test:coverage  # Звіт покриття алгоритмічного ядра тестами (>90%)
-npm run lint           # Статичний аналіз ESLint
-npm run format:check   # Перевірка форматування Prettier
-npm run typecheck      # Строга перевірка типів TypeScript у всіх workspaces
-npm run spellcheck     # Перевірка орфографії codespell
-npm run check          # Повний конвеєр верифікації (spellcheck + format + lint + typecheck + test + build)
+npm install                   # Встановлення всіх залежностей монорепозиторію
+npm run dev                   # Одночасний запуск shared-types, REST API (4000) та Vite клієнта (5173)
+npm run build                 # Повна виробнича збірка всіх пакетів
+npm run test                  # Запуск усіх тестів Vitest (shared-types, server API, client UI)
+npm run test:coverage         # Звіт покриття алгоритмічного ядра тестами (>90%)
+npm run test:e2e              # Наскрізне браузерне тестування через Chrome CDP
+npm run lint                  # Статичний аналіз ESLint
+npm run format:check          # Перевірка форматування Prettier
+npm run typecheck             # Строга перевірка типів TypeScript у всіх workspaces
+npm run spellcheck            # Перевірка орфографії codespell
+npm audit --audit-level=high  # Перевірка вразливостей залежностей рівня high/critical
+npm run check                 # Повний конвеєр верифікації (spellcheck + format + lint + typecheck + test + build)
 ```
+
+Перед комітом у Git рекомендовано запускати `npm run check && npm audit --audit-level=high` (ці ж перевірки виконує CI-конвеєр `.github/workflows/ci.yml`).
 
 ---
 
