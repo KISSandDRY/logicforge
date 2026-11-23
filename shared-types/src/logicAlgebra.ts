@@ -55,6 +55,12 @@ export function normalizeGateInput(signal: LogicState): '0' | '1' | 'X' {
   return 'X';
 }
 
+export function logicBuffer(a: LogicState): LogicState {
+  if (a === '0') return '0';
+  if (a === '1') return '1';
+  return 'X';
+}
+
 export function logicNot(a: LogicState): LogicState {
   const norm = normalizeGateInput(a);
   if (norm === '0') return '1';
@@ -145,6 +151,48 @@ export function evaluateMux4To1(
   const idx = (b1 === '1' ? 2 : 0) + (b0 === '1' ? 1 : 0);
   const selected = d[idx];
   return selected === 'Z' ? 'Z' : normalizeGateInput(selected);
+}
+
+export function evaluateDecoder2To4(
+  a0: LogicState,
+  a1: LogicState,
+  en: LogicState,
+): { Y0: LogicState; Y1: LogicState; Y2: LogicState; Y3: LogicState } {
+  const normEn = en === 'Z' ? '1' : normalizeGateInput(en);
+  if (normEn === '0') {
+    return { Y0: '0', Y1: '0', Y2: '0', Y3: '0' };
+  }
+  const b0 = a0 === 'Z' ? '0' : normalizeGateInput(a0);
+  const b1 = a1 === 'Z' ? '0' : normalizeGateInput(a1);
+  if (normEn === 'X' || b0 === 'X' || b1 === 'X') {
+    return { Y0: 'X', Y1: 'X', Y2: 'X', Y3: 'X' };
+  }
+  const idx = (b1 === '1' ? 2 : 0) + (b0 === '1' ? 1 : 0);
+  return {
+    Y0: idx === 0 ? '1' : '0',
+    Y1: idx === 1 ? '1' : '0',
+    Y2: idx === 2 ? '1' : '0',
+    Y3: idx === 3 ? '1' : '0',
+  };
+}
+
+export function evaluateComparator2Bit(
+  a0: LogicState,
+  a1: LogicState,
+  b0: LogicState,
+  b1: LogicState,
+): { GT: LogicState; EQ: LogicState; LT: LogicState } {
+  const bits = [a0, a1, b0, b1].map((s) => (s === 'Z' ? '0' : normalizeGateInput(s)));
+  if (bits.some((b) => b === 'X')) {
+    return { GT: 'X', EQ: 'X', LT: 'X' };
+  }
+  const aVal = (bits[1] === '1' ? 2 : 0) + (bits[0] === '1' ? 1 : 0);
+  const bVal = (bits[3] === '1' ? 2 : 0) + (bits[2] === '1' ? 1 : 0);
+  return {
+    GT: aVal > bVal ? '1' : '0',
+    EQ: aVal === bVal ? '1' : '0',
+    LT: aVal < bVal ? '1' : '0',
+  };
 }
 
 export function evaluateAluSlice(
@@ -270,9 +318,10 @@ export function computeTimer555Intervals(
   frequencyHz: number;
   dutyCyclePercent: number;
 } {
-  const safeR1 = Math.max(100, r1Ohms);
-  const safeR2 = Math.max(100, r2Ohms);
-  const safeC = Math.max(0.001, capacitanceUf) * 1e-6;
+  const safeR1 = Math.max(100, Number.isFinite(r1Ohms) ? r1Ohms : 1000);
+  const safeR2 = Math.max(100, Number.isFinite(r2Ohms) ? r2Ohms : 2000);
+  const rawC = Number.isFinite(capacitanceUf) ? capacitanceUf : 0.02;
+  const safeC = Math.max(0.001, rawC) * 1e-6;
 
   const ln2 = Math.LN2;
   const highSec = ln2 * (safeR1 + safeR2) * safeC;

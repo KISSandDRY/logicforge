@@ -25,22 +25,22 @@ export interface PresetCircuitTemplate {
 }
 
 export function buildFullAdderPreset(): CircuitDocument {
-  const swA = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_a', { x: 80, y: 80 }, 'A');
+  const swA = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_a', { x: 48, y: 72 }, 'A');
   swA.properties.switchState = '1';
-  const swB = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_b', { x: 80, y: 180 }, 'B');
+  const swB = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_b', { x: 48, y: 152 }, 'B');
   swB.properties.switchState = '1';
-  const swCin = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_cin', { x: 80, y: 290 }, 'Cin');
+  const swCin = createNodeFromCatalog('INPUT_SWITCH', 'n_sw_cin', { x: 48, y: 272 }, 'Cin');
   swCin.properties.switchState = '0';
 
-  const xor1 = createNodeFromCatalog('XOR', 'n_xor_1', { x: 280, y: 110 }, 'XOR1');
-  const xor2 = createNodeFromCatalog('XOR', 'n_xor_2', { x: 480, y: 150 }, 'XOR2');
-  const and1 = createNodeFromCatalog('AND', 'n_and_1', { x: 280, y: 240 }, 'AND1');
-  const and2 = createNodeFromCatalog('AND', 'n_and_2', { x: 480, y: 270 }, 'AND2');
-  const or1 = createNodeFromCatalog('OR', 'n_or_1', { x: 660, y: 255 }, 'OR_COUT');
+  const xor1 = createNodeFromCatalog('XOR', 'n_xor_1', { x: 248, y: 80 }, 'XOR1');
+  const xor2 = createNodeFromCatalog('XOR', 'n_xor_2', { x: 456, y: 96 }, 'XOR2');
+  const and1 = createNodeFromCatalog('AND', 'n_and_1', { x: 248, y: 208 }, 'AND1');
+  const and2 = createNodeFromCatalog('AND', 'n_and_2', { x: 456, y: 256 }, 'AND2');
+  const or1 = createNodeFromCatalog('OR', 'n_or_1', { x: 640, y: 232 }, 'OR_COUT');
 
-  const ledSum = createNodeFromCatalog('LED', 'n_led_sum', { x: 830, y: 155 }, 'SUM');
+  const ledSum = createNodeFromCatalog('LED', 'n_led_sum', { x: 816, y: 104 }, 'SUM');
   ledSum.properties.ledColor = 'emerald';
-  const ledCout = createNodeFromCatalog('LED', 'n_led_cout', { x: 830, y: 260 }, 'COUT');
+  const ledCout = createNodeFromCatalog('LED', 'n_led_cout', { x: 816, y: 240 }, 'COUT');
   ledCout.properties.ledColor = 'cyan';
 
   const nodes: CircuitNodeData[] = [swA, swB, swCin, xor1, xor2, and1, and2, or1, ledSum, ledCout];
@@ -71,28 +71,28 @@ export function buildFullAdderPreset(): CircuitDocument {
       createdAt: '2026-10-15T10:00:00.000Z',
       updatedAt: '2026-11-01T12:00:00.000Z',
     },
-    viewport: { panX: 20, panY: 20, zoom: 1, gridSnap: true },
+    viewport: { panX: 16, panY: 16, zoom: 0.85, gridSnap: true },
     nodes,
     edges,
   };
 }
 
 export function buildTriStateBusPreset(): CircuitDocument {
-  const d0 = createNodeFromCatalog('INPUT_SWITCH', 'n_d0', { x: 70, y: 70 }, 'DATA_A');
+  const d0 = createNodeFromCatalog('INPUT_SWITCH', 'n_d0', { x: 64, y: 80 }, 'DATA_A');
   d0.properties.switchState = '1';
-  const en0 = createNodeFromCatalog('INPUT_SWITCH', 'n_en0', { x: 70, y: 150 }, 'EN_A');
+  const en0 = createNodeFromCatalog('INPUT_SWITCH', 'n_en0', { x: 64, y: 144 }, 'EN_A');
   en0.properties.switchState = '1';
 
-  const d1 = createNodeFromCatalog('INPUT_SWITCH', 'n_d1', { x: 70, y: 260 }, 'DATA_B');
+  const d1 = createNodeFromCatalog('INPUT_SWITCH', 'n_d1', { x: 64, y: 240 }, 'DATA_B');
   d1.properties.switchState = '0';
-  const en1 = createNodeFromCatalog('INPUT_SWITCH', 'n_en1', { x: 70, y: 340 }, 'EN_B');
+  const en1 = createNodeFromCatalog('INPUT_SWITCH', 'n_en1', { x: 64, y: 304 }, 'EN_B');
   en1.properties.switchState = '0';
 
-  const bufA = createNodeFromCatalog('TRI_BUFFER', 'n_buf_a', { x: 290, y: 95 }, 'DRV_A');
-  const bufB = createNodeFromCatalog('TRI_BUFFER', 'n_buf_b', { x: 290, y: 285 }, 'DRV_B');
+  const bufA = createNodeFromCatalog('TRI_BUFFER', 'n_buf_a', { x: 288, y: 104 }, 'DRV_A');
+  const bufB = createNodeFromCatalog('TRI_BUFFER', 'n_buf_b', { x: 288, y: 264 }, 'DRV_B');
 
-  const busProbe = createNodeFromCatalog('PROBE', 'n_probe_bus', { x: 540, y: 145 }, 'SHARED_BUS');
-  const busLed = createNodeFromCatalog('LED', 'n_led_bus', { x: 540, y: 245 }, 'BUS_LED');
+  const busProbe = createNodeFromCatalog('PROBE', 'n_probe_bus', { x: 544, y: 144 }, 'SHARED_BUS');
+  const busLed = createNodeFromCatalog('LED', 'n_led_bus', { x: 544, y: 232 }, 'BUS_LED');
   busLed.properties.ledColor = 'amber';
 
   return {
@@ -121,19 +121,19 @@ export function buildTriStateBusPreset(): CircuitDocument {
 }
 
 export function buildCounterHexPreset(): CircuitDocument {
-  const clk = createNodeFromCatalog('CLOCK', 'n_clk', { x: 80, y: 90 }, 'SYS_CLK');
+  const clk = createNodeFromCatalog('CLOCK', 'n_clk', { x: 64, y: 96 }, 'SYS_CLK');
   clk.properties.frequencyHz = 2;
   clk.properties.halfPeriodNs = 40;
 
-  const en = createNodeFromCatalog('INPUT_SWITCH', 'n_en', { x: 80, y: 195 }, 'COUNT_EN');
+  const en = createNodeFromCatalog('INPUT_SWITCH', 'n_en', { x: 64, y: 160 }, 'COUNT_EN');
   en.properties.switchState = '1';
 
-  const rst = createNodeFromCatalog('INPUT_SWITCH', 'n_rst', { x: 80, y: 290 }, 'RESET');
+  const rst = createNodeFromCatalog('INPUT_SWITCH', 'n_rst', { x: 64, y: 224 }, 'RESET');
   rst.properties.switchState = '0';
 
-  const cnt = createNodeFromCatalog('COUNTER_4BIT', 'n_cnt', { x: 310, y: 140 }, 'CNT_4BIT');
-  const hex = createNodeFromCatalog('SEVEN_SEGMENT', 'n_hex', { x: 580, y: 115 }, 'HEX_DISP');
-  const carryLed = createNodeFromCatalog('LED', 'n_led_co', { x: 580, y: 285 }, 'OVERFLOW');
+  const cnt = createNodeFromCatalog('COUNTER_4BIT', 'n_cnt', { x: 288, y: 96 }, 'CNT_4BIT');
+  const hex = createNodeFromCatalog('SEVEN_SEGMENT', 'n_hex', { x: 560, y: 96 }, 'HEX_DISP');
+  const carryLed = createNodeFromCatalog('LED', 'n_led_co', { x: 560, y: 248 }, 'OVERFLOW');
   carryLed.properties.ledColor = 'red';
 
   return {
@@ -163,23 +163,23 @@ export function buildCounterHexPreset(): CircuitDocument {
 }
 
 export function buildTimer555JkDividerPreset(): CircuitDocument {
-  const rstSw = createNodeFromCatalog('INPUT_SWITCH', 'n_555_en', { x: 70, y: 165 }, 'RUN_555');
+  const rstSw = createNodeFromCatalog('INPUT_SWITCH', 'n_555_en', { x: 48, y: 184 }, 'RUN_555');
   rstSw.properties.switchState = '1';
 
-  const vcc = createNodeFromCatalog('CONST_HIGH', 'n_vcc', { x: 280, y: 290 }, 'VCC');
-  const gnd = createNodeFromCatalog('CONST_LOW', 'n_gnd', { x: 280, y: 365 }, 'GND');
+  const vcc = createNodeFromCatalog('CONST_HIGH', 'n_vcc', { x: 248, y: 256 }, 'VCC');
+  const gnd = createNodeFromCatalog('CONST_LOW', 'n_gnd', { x: 248, y: 320 }, 'GND');
 
-  const ne555 = createNodeFromCatalog('TIMER_555', 'n_555', { x: 250, y: 110 }, 'NE555_GEN');
+  const ne555 = createNodeFromCatalog('TIMER_555', 'n_555', { x: 216, y: 112 }, 'NE555_GEN');
   ne555.properties.resistanceR1Ohms = 1200;
   ne555.properties.resistanceR2Ohms = 1800;
   ne555.properties.capacitanceUf = 0.02;
 
-  const jk = createNodeFromCatalog('JK_FLIPFLOP', 'n_jk', { x: 500, y: 150 }, 'JK_DIV2');
-  const ledPulse = createNodeFromCatalog('LED', 'n_led_555', { x: 730, y: 85 }, 'PULSE_555');
+  const jk = createNodeFromCatalog('JK_FLIPFLOP', 'n_jk', { x: 456, y: 208 }, 'JK_DIV2');
+  const ledPulse = createNodeFromCatalog('LED', 'n_led_555', { x: 672, y: 136 }, 'PULSE_555');
   ledPulse.properties.ledColor = 'amber';
-  const ledDiv = createNodeFromCatalog('LED', 'n_led_div2', { x: 730, y: 175 }, 'DIV_BY_2');
+  const ledDiv = createNodeFromCatalog('LED', 'n_led_div2', { x: 672, y: 216 }, 'DIV_BY_2');
   ledDiv.properties.ledColor = 'emerald';
-  const probeDis = createNodeFromCatalog('PROBE', 'n_prb_dis', { x: 495, y: 55 }, 'DISCH_Z');
+  const probeDis = createNodeFromCatalog('PROBE', 'n_prb_dis', { x: 488, y: 56 }, 'DISCH_Z');
 
   return {
     metadata: {
@@ -192,7 +192,7 @@ export function buildTimer555JkDividerPreset(): CircuitDocument {
       createdAt: '2026-10-20T08:00:00.000Z',
       updatedAt: '2026-11-04T09:45:00.000Z',
     },
-    viewport: { panX: 20, panY: 20, zoom: 1, gridSnap: true },
+    viewport: { panX: 24, panY: 20, zoom: 0.9, gridSnap: true },
     nodes: [rstSw, vcc, gnd, ne555, jk, ledPulse, ledDiv, probeDis],
     edges: [
       edge('et1', 'n_555_en', 'OUT', 'n_555', 'RESET'),
@@ -208,26 +208,26 @@ export function buildTimer555JkDividerPreset(): CircuitDocument {
 }
 
 export function buildMicroprocessorAluPreset(): CircuitDocument {
-  const a0 = createNodeFromCatalog('INPUT_SWITCH', 'n_a0', { x: 70, y: 50 }, 'A0');
+  const a0 = createNodeFromCatalog('INPUT_SWITCH', 'n_a0', { x: 48, y: 48 }, 'A0');
   a0.properties.switchState = '1';
-  const a1 = createNodeFromCatalog('INPUT_SWITCH', 'n_a1', { x: 70, y: 115 }, 'A1');
+  const a1 = createNodeFromCatalog('INPUT_SWITCH', 'n_a1', { x: 48, y: 104 }, 'A1');
   a1.properties.switchState = '1';
-  const b0 = createNodeFromCatalog('INPUT_SWITCH', 'n_b0', { x: 70, y: 185 }, 'B0');
+  const b0 = createNodeFromCatalog('INPUT_SWITCH', 'n_b0', { x: 48, y: 160 }, 'B0');
   b0.properties.switchState = '1';
-  const b1 = createNodeFromCatalog('INPUT_SWITCH', 'n_b1', { x: 70, y: 250 }, 'B1');
+  const b1 = createNodeFromCatalog('INPUT_SWITCH', 'n_b1', { x: 48, y: 216 }, 'B1');
   b1.properties.switchState = '0';
-  const op0 = createNodeFromCatalog('INPUT_SWITCH', 'n_op0', { x: 70, y: 325 }, 'OP0');
+  const op0 = createNodeFromCatalog('INPUT_SWITCH', 'n_op0', { x: 48, y: 272 }, 'OP0');
   op0.properties.switchState = '0';
-  const op1 = createNodeFromCatalog('INPUT_SWITCH', 'n_op1', { x: 70, y: 390 }, 'OP1');
+  const op1 = createNodeFromCatalog('INPUT_SWITCH', 'n_op1', { x: 48, y: 328 }, 'OP1');
   op1.properties.switchState = '0';
 
-  const alu = createNodeFromCatalog('ALU_4BIT', 'n_alu', { x: 330, y: 140 }, 'MP_ALU');
+  const alu = createNodeFromCatalog('ALU_4BIT', 'n_alu', { x: 336, y: 112 }, 'MP_ALU');
 
-  const f0 = createNodeFromCatalog('LED', 'n_f0', { x: 610, y: 110 }, 'RES_F0');
-  const f1 = createNodeFromCatalog('LED', 'n_f1', { x: 610, y: 180 }, 'RES_F1');
-  const cy = createNodeFromCatalog('LED', 'n_cy', { x: 610, y: 255 }, 'FLAG_CY');
+  const f0 = createNodeFromCatalog('LED', 'n_f0', { x: 608, y: 80 }, 'RES_F0');
+  const f1 = createNodeFromCatalog('LED', 'n_f1', { x: 608, y: 144 }, 'RES_F1');
+  const cy = createNodeFromCatalog('LED', 'n_cy', { x: 608, y: 208 }, 'FLAG_CY');
   cy.properties.ledColor = 'amber';
-  const zf = createNodeFromCatalog('LED', 'n_zf', { x: 610, y: 330 }, 'FLAG_ZERO');
+  const zf = createNodeFromCatalog('LED', 'n_zf', { x: 608, y: 272 }, 'FLAG_ZERO');
   zf.properties.ledColor = 'cyan';
 
   return {
@@ -241,7 +241,7 @@ export function buildMicroprocessorAluPreset(): CircuitDocument {
       createdAt: '2026-10-22T14:20:00.000Z',
       updatedAt: '2026-11-05T18:10:00.000Z',
     },
-    viewport: { panX: 20, panY: 10, zoom: 0.95, gridSnap: true },
+    viewport: { panX: 20, panY: 16, zoom: 0.92, gridSnap: true },
     nodes: [a0, a1, b0, b1, op0, op1, alu, f0, f1, cy, zf],
     edges: [
       edge('ea1', 'n_a0', 'OUT', 'n_alu', 'A0'),
@@ -259,19 +259,19 @@ export function buildMicroprocessorAluPreset(): CircuitDocument {
 }
 
 export function buildShiftRegisterPreset(): CircuitDocument {
-  const dataIn = createNodeFromCatalog('INPUT_SWITCH', 'n_din', { x: 70, y: 95 }, 'SERIAL_IN');
+  const dataIn = createNodeFromCatalog('INPUT_SWITCH', 'n_din', { x: 64, y: 120 }, 'SERIAL_IN');
   dataIn.properties.switchState = '1';
-  const clk = createNodeFromCatalog('CLOCK', 'n_sclk', { x: 70, y: 195 }, 'SHIFT_CLK');
+  const clk = createNodeFromCatalog('CLOCK', 'n_sclk', { x: 64, y: 184 }, 'SHIFT_CLK');
   clk.properties.halfPeriodNs = 45;
-  const clr = createNodeFromCatalog('INPUT_SWITCH', 'n_sclr', { x: 70, y: 295 }, 'CLEAR');
+  const clr = createNodeFromCatalog('INPUT_SWITCH', 'n_sclr', { x: 64, y: 248 }, 'CLEAR');
   clr.properties.switchState = '0';
 
-  const dff0 = createNodeFromCatalog('D_FLIPFLOP', 'n_dff0', { x: 290, y: 130 }, 'DFF_STAGE0');
-  const dff1 = createNodeFromCatalog('D_FLIPFLOP', 'n_dff1', { x: 520, y: 130 }, 'DFF_STAGE1');
+  const dff0 = createNodeFromCatalog('D_FLIPFLOP', 'n_dff0', { x: 288, y: 120 }, 'DFF_STAGE0');
+  const dff1 = createNodeFromCatalog('D_FLIPFLOP', 'n_dff1', { x: 528, y: 120 }, 'DFF_STAGE1');
 
-  const q0Led = createNodeFromCatalog('LED', 'n_q0', { x: 480, y: 40 }, 'BIT_Q0');
+  const q0Led = createNodeFromCatalog('LED', 'n_q0', { x: 528, y: 40 }, 'BIT_Q0');
   q0Led.properties.ledColor = 'cyan';
-  const q1Led = createNodeFromCatalog('LED', 'n_q1', { x: 740, y: 135 }, 'BIT_Q1');
+  const q1Led = createNodeFromCatalog('LED', 'n_q1', { x: 752, y: 128 }, 'BIT_Q1');
   q1Led.properties.ledColor = 'violet';
 
   return {
@@ -296,6 +296,58 @@ export function buildShiftRegisterPreset(): CircuitDocument {
       edge('es6', 'n_sclk', 'OUT', 'n_dff1', 'CLK'),
       edge('es7', 'n_sclr', 'OUT', 'n_dff1', 'CLR'),
       edge('es8', 'n_dff1', 'Q', 'n_q1', 'IN'),
+    ],
+  };
+}
+
+export function buildAddressDecoderComparatorPreset(): CircuitDocument {
+  const dip = createNodeFromCatalog('DIP_SWITCH_4', 'n_dip_bus', { x: 64, y: 120 }, 'BUS_WORD');
+  dip.properties.dipSwitchStates = ['1', '0', '1', '0'];
+
+  const enSw = createNodeFromCatalog('INPUT_SWITCH', 'n_dec_en', { x: 64, y: 272 }, 'CS_EN');
+  enSw.properties.switchState = '1';
+
+  const dec = createNodeFromCatalog('DECODER_2TO4', 'n_dec', { x: 320, y: 64 }, 'ADDR_DEC');
+  const cmp = createNodeFromCatalog('COMPARATOR_2BIT', 'n_cmp', { x: 320, y: 240 }, 'BUS_CMP');
+
+  const ledY1 = createNodeFromCatalog('LED', 'n_led_y1', { x: 592, y: 88 }, 'SEL_Y1');
+  ledY1.properties.ledColor = 'cyan';
+  const ledY2 = createNodeFromCatalog('LED', 'n_led_y2', { x: 592, y: 144 }, 'SEL_Y2');
+  ledY2.properties.ledColor = 'violet';
+
+  const ledGt = createNodeFromCatalog('LED', 'n_led_gt', { x: 592, y: 216 }, 'A_GT_B');
+  ledGt.properties.ledColor = 'amber';
+  const ledEq = createNodeFromCatalog('LED', 'n_led_eq', { x: 592, y: 280 }, 'A_EQ_B');
+  ledEq.properties.ledColor = 'emerald';
+  const ledLt = createNodeFromCatalog('LED', 'n_led_lt', { x: 592, y: 344 }, 'A_LT_B');
+  ledLt.properties.ledColor = 'red';
+
+  return {
+    metadata: {
+      schemaVersion: '1.0.0',
+      title: 'Дешифратор адреси 2-в-4 та 2-бітний компаратор слів із DIP-шиною',
+      description:
+        'Комбінована мікропроцесорна схема дешифрації адреси (Y0..Y3) та апаратного порівняння двох 2-бітних операндів (A>B, A=B, A<B) від 4-секційного DIP-перемикача.',
+      category: 'Мікропроцесорні пристрої',
+      tags: ['дешифратор', 'компаратор', 'DIP-перемикач', 'адресна шина'],
+      createdAt: '2026-10-27T10:00:00.000Z',
+      updatedAt: '2026-11-08T10:00:00.000Z',
+    },
+    viewport: { panX: 20, panY: 15, zoom: 0.95, gridSnap: true },
+    nodes: [dip, enSw, dec, cmp, ledY1, ledY2, ledGt, ledEq, ledLt],
+    edges: [
+      edge('edc1', 'n_dip_bus', 'Q0', 'n_dec', 'A0'),
+      edge('edc2', 'n_dip_bus', 'Q1', 'n_dec', 'A1'),
+      edge('edc3', 'n_dec_en', 'OUT', 'n_dec', 'EN'),
+      edge('edc4', 'n_dec', 'Y1', 'n_led_y1', 'IN'),
+      edge('edc5', 'n_dec', 'Y2', 'n_led_y2', 'IN'),
+      edge('edc6', 'n_dip_bus', 'Q0', 'n_cmp', 'A0'),
+      edge('edc7', 'n_dip_bus', 'Q1', 'n_cmp', 'A1'),
+      edge('edc8', 'n_dip_bus', 'Q2', 'n_cmp', 'B0'),
+      edge('edc9', 'n_dip_bus', 'Q3', 'n_cmp', 'B1'),
+      edge('edc10', 'n_cmp', 'GT', 'n_led_gt', 'IN'),
+      edge('edc11', 'n_cmp', 'EQ', 'n_led_eq', 'IN'),
+      edge('edc12', 'n_cmp', 'LT', 'n_led_lt', 'IN'),
     ],
   };
 }
@@ -330,5 +382,10 @@ export const PRESET_CIRCUITS: PresetCircuitTemplate[] = [
     id: 'preset-shift-register',
     slug: 'dff-shift-register',
     document: buildShiftRegisterPreset(),
+  },
+  {
+    id: 'preset-decoder-comparator',
+    slug: 'decoder-comparator-dip',
+    document: buildAddressDecoderComparatorPreset(),
   },
 ];

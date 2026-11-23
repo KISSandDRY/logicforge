@@ -48,6 +48,9 @@ export function pinKey(nodeId: string, pinId: string): string {
 
 export function parsePinKey(key: string): { nodeId: string; pinId: string } {
   const idx = key.indexOf('::');
+  if (idx === -1) {
+    return { nodeId: key, pinId: '' };
+  }
   return {
     nodeId: key.slice(0, idx),
     pinId: key.slice(idx + 2),
@@ -264,9 +267,13 @@ export function analyzeCircuitGraph(
   const topologicalOrder: string[] = [];
   const arrivalTimesNs: Record<string, number> = {};
   const predecessor = new Map<string, string | null>();
+  const safeNodeDelay = (n: CircuitNodeData): number => {
+    const raw = n.properties.propagationDelayNs;
+    return Number.isFinite(raw) && raw >= 0 ? Math.min(10000, raw) : 0;
+  };
 
   for (const n of doc.nodes) {
-    arrivalTimesNs[n.id] = n.properties.propagationDelayNs;
+    arrivalTimesNs[n.id] = safeNodeDelay(n);
     predecessor.set(n.id, null);
   }
 
@@ -278,7 +285,7 @@ export function analyzeCircuitGraph(
     const neighbors = dagAdj.get(u) ?? new Set<string>();
     for (const v of neighbors) {
       const vNode = nodeMap.get(v)!;
-      const candidateArrival = arrivalTimesNs[u] + vNode.properties.propagationDelayNs;
+      const candidateArrival = arrivalTimesNs[u] + safeNodeDelay(vNode);
       if (candidateArrival > arrivalTimesNs[v]) {
         arrivalTimesNs[v] = candidateArrival;
         predecessor.set(v, u);
@@ -298,12 +305,30 @@ export function analyzeCircuitGraph(
     dagAdj,
   );
 
+  // Якщо наявні асинхронні петлі зворотного зв'язку, робимо один обмежений прохід по вузлах поза топологічним порядком
+  if (!isCombinationalAcyclic && doc.nodes.length > 0) {
+    const topoSet = new Set(topologicalOrder);
+    for (const u of doc.nodes) {
+      if (topoSet.has(u.id)) continue;
+      for (const v of dagAdj.get(u.id) ?? []) {
+        const vNode = nodeMap.get(v);
+        if (!vNode) continue;
+        const candidateArrival = arrivalTimesNs[u.id] + safeNodeDelay(vNode);
+        if (candidateArrival > arrivalTimesNs[v]) {
+          arrivalTimesNs[v] = candidateArrival;
+        }
+      }
+    }
+  }
+
   // Відновлення критичного шляху (найбільший час прибуття сигналу)
   let maxDelay = 0;
   let endNodeId: string | null = null;
-  for (const id of topologicalOrder) {
-    if (arrivalTimesNs[id] >= maxDelay) {
-      maxDelay = arrivalTimesNs[id];
+  const rankIds = isCombinationalAcyclic ? topologicalOrder : doc.nodes.map((n) => n.id);
+  for (const id of rankIds) {
+    const arr = arrivalTimesNs[id] ?? 0;
+    if (arr > maxDelay || (arr === maxDelay && endNodeId === null)) {
+      maxDelay = arr;
       endNodeId = id;
     }
   }
@@ -318,7 +343,9 @@ export function analyzeCircuitGraph(
   }
   criticalPathNodes.reverse();
 
-  const maxClockFrequencyMhz = maxDelay > 0 ? Number((1000 / maxDelay).toFixed(2)) : 1000;
+  // Захист від ділення на нуль, коли схема порожня або всі затримки дорівнюють 0 нс
+  const maxClockFrequencyMhz =
+    maxDelay > 0 && Number.isFinite(maxDelay) ? Number((1000 / maxDelay).toFixed(2)) : 0;
 
   return {
     isCombinationalAcyclic,

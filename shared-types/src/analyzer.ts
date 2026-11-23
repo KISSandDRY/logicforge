@@ -19,20 +19,36 @@ export function synthesizeTruthTable(
   doc: Pick<CircuitDocument, 'nodes' | 'edges' | 'customDefinitions'>,
   maxInputs = 6,
 ): TruthTableResult {
-  const inputNodes = doc.nodes.filter((n) => n.type === 'INPUT_SWITCH');
+  const safeMaxInputs = Number.isFinite(maxInputs)
+    ? Math.max(1, Math.min(8, Math.floor(maxInputs)))
+    : 6;
+  const inputNodes = doc.nodes.filter((n) => n.type === 'INPUT_SWITCH' || n.type === 'PUSH_BUTTON');
   const outputNodes = doc.nodes.filter((n) => n.type === 'LED' || n.type === 'PROBE');
 
-  const truncated = inputNodes.length > maxInputs;
-  const activeInputs = inputNodes.slice(0, maxInputs);
+  const truncated = inputNodes.length > safeMaxInputs;
+  const activeInputs = inputNodes.slice(0, safeMaxInputs);
 
-  const inputLabels = activeInputs.map((n) => ({
-    nodeId: n.id,
-    label: n.properties.label || n.id,
-  }));
-  const outputLabels = outputNodes.map((n) => ({
-    nodeId: n.id,
-    label: n.properties.label || n.id,
-  }));
+  const usedInNames = new Map<string, number>();
+  const inputLabels = activeInputs.map((n) => {
+    const base = (n.properties.label || n.id).trim() || n.id;
+    const seen = usedInNames.get(base) ?? 0;
+    usedInNames.set(base, seen + 1);
+    return {
+      nodeId: n.id,
+      label: seen === 0 ? base : `${base}_${seen + 1}`,
+    };
+  });
+
+  const usedOutNames = new Map<string, number>();
+  const outputLabels = outputNodes.map((n) => {
+    const base = (n.properties.label || n.id).trim() || n.id;
+    const seen = usedOutNames.get(base) ?? 0;
+    usedOutNames.set(base, seen + 1);
+    return {
+      nodeId: n.id,
+      label: seen === 0 ? base : `${base}_${seen + 1}`,
+    };
+  });
 
   if (activeInputs.length === 0 || outputNodes.length === 0) {
     return {
@@ -60,30 +76,30 @@ export function synthesizeTruthTable(
       const bitPos = activeInputs.length - 1 - bitIdx;
       const bitVal: LogicState = ((mask >> bitPos) & 1) === 1 ? '1' : '0';
       sim.setInputState(inpNode.id, bitVal);
-      inputRecord[inpNode.properties.label || inpNode.id] = bitVal;
+      inputRecord[inputLabels[bitIdx].label] = bitVal;
     });
 
     const snap = sim.settleCombinational(600);
     const outputRecord: Record<string, LogicState> = {};
 
-    for (const outNode of outputNodes) {
-      const outLabel = outNode.properties.label || outNode.id;
+    outputNodes.forEach((outNode, outIdx) => {
+      const outLabel = outputLabels[outIdx].label;
       const pinMap = snap.nodePinStates[outNode.id] ?? {};
       const val = pinMap.IN ?? 'Z';
       outputRecord[outLabel] = val;
 
       if (val === '1') {
-        const literals = activeInputs.map((inpNode, bitIdx) => {
+        const literals = activeInputs.map((_inpNode, bitIdx) => {
           const bitPos = activeInputs.length - 1 - bitIdx;
           const isOne = ((mask >> bitPos) & 1) === 1;
-          const name = inpNode.properties.label || inpNode.id;
+          const name = inputLabels[bitIdx].label;
           return isOne ? name : `!${name}`;
         });
         mintermsByOutput[outLabel].push(
           literals.length > 1 ? `(${literals.join(' · ')})` : literals[0],
         );
       }
-    }
+    });
 
     rows.push({
       inputs: inputRecord,
@@ -162,6 +178,9 @@ export function generateEngineeringReport(doc: CircuitDocument): EngineeringRepo
       n.type === 'TIMER_555' ||
       n.type === 'JK_FLIPFLOP' ||
       n.type === 'D_FLIPFLOP' ||
+      n.type === 'T_FLIPFLOP' ||
+      n.type === 'REGISTER_4BIT' ||
+      n.type === 'SHIFT_REG_SIPO' ||
       n.type === 'COUNTER_4BIT',
   );
 

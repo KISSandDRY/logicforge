@@ -1,5 +1,6 @@
 export * from './types';
 export * from './catalog';
+export * from './circuitSanitizer';
 export * from './logicAlgebra';
 export * from './minHeap';
 export * from './graphAnalysis';

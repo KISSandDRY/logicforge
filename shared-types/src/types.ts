@@ -14,9 +14,12 @@ export type ComponentCategory = 'INPUTS' | 'GATES' | 'SEQUENTIAL' | 'MICROPROCES
 export type ComponentType =
   | 'INPUT_SWITCH'
   | 'PUSH_BUTTON'
+  | 'DIP_SWITCH_4'
   | 'CLOCK'
   | 'CONST_HIGH'
   | 'CONST_LOW'
+  | 'BUFFER'
+  | 'SCHMITT_INV'
   | 'AND'
   | 'OR'
   | 'NOT'
@@ -28,9 +31,14 @@ export type ComponentType =
   | 'SR_LATCH'
   | 'D_FLIPFLOP'
   | 'JK_FLIPFLOP'
+  | 'T_FLIPFLOP'
+  | 'REGISTER_4BIT'
+  | 'SHIFT_REG_SIPO'
   | 'COUNTER_4BIT'
   | 'TIMER_555'
   | 'MUX_4TO1'
+  | 'DECODER_2TO4'
+  | 'COMPARATOR_2BIT'
   | 'ALU_4BIT'
   | 'CUSTOM_IC'
   | 'LED'
@@ -61,6 +69,8 @@ export interface NodeProperties {
   propagationDelayNs: number;
   /** Початковий або поточний стан перемикача ('0' | '1' | 'Z') */
   switchState?: LogicState;
+  /** Масив станів для 4-секційного DIP-перемикача (Q0..Q3) */
+  dipSwitchStates?: [LogicState, LogicState, LogicState, LogicState];
   /** Частота тактового генератора в Гц (візуальна) та напівперіод у нс (модельний) */
   frequencyHz?: number;
   halfPeriodNs?: number;

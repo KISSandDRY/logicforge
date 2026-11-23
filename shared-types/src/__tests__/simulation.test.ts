@@ -5,6 +5,8 @@ import {
   MinHeap,
   PRESET_CIRCUITS,
   analyzeCircuitGraph,
+  buildAddressDecoderComparatorPreset,
+  buildCounterHexPreset,
   buildFullAdderPreset,
   buildMicroprocessorAluPreset,
   buildShiftRegisterPreset,
@@ -14,10 +16,13 @@ import {
   createNodeFromCatalog,
   decodeSevenSegment,
   evaluateAluSlice,
+  evaluateComparator2Bit,
+  evaluateDecoder2To4,
   evaluateMux4To1,
   extractElectricalNets,
   generateEngineeringReport,
   logicAnd,
+  logicBuffer,
   logicNand,
   logicNor,
   logicNot,
@@ -95,6 +100,40 @@ describe('Four-valued Tri-State Logic Algebra (IEEE 1164 / Kleene)', () => {
     const rc = computeTimer555Intervals(1000, 2000, 0.02);
     expect(rc.highNs).toBeGreaterThan(rc.lowNs);
     expect(rc.dutyCyclePercent).toBeCloseTo(60, 0);
+
+    // Digital buffer, 2-to-4 decoder, and 2-bit magnitude comparator
+    expect(logicBuffer('0')).toBe('0');
+    expect(logicBuffer('1')).toBe('1');
+    expect(logicBuffer('Z')).toBe('X');
+
+    expect(evaluateDecoder2To4('0', '1', '1')).toEqual({
+      Y0: '0',
+      Y1: '0',
+      Y2: '1',
+      Y3: '0',
+    });
+    expect(evaluateDecoder2To4('1', '1', '0')).toEqual({
+      Y0: '0',
+      Y1: '0',
+      Y2: '0',
+      Y3: '0',
+    });
+
+    expect(evaluateComparator2Bit('1', '1', '0', '1')).toEqual({
+      GT: '1',
+      EQ: '0',
+      LT: '0',
+    });
+    expect(evaluateComparator2Bit('0', '1', '0', '1')).toEqual({
+      GT: '0',
+      EQ: '1',
+      LT: '0',
+    });
+    expect(evaluateComparator2Bit('1', '0', '0', '1')).toEqual({
+      GT: '0',
+      EQ: '0',
+      LT: '1',
+    });
   });
 });
 
@@ -240,18 +279,29 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
     expect(cleared.nodePinStates.n_q0.IN).toBe('0');
     expect(cleared.nodePinStates.n_q1.IN).toBe('0');
 
-    // NE555 + JK divider
+    // NE555 + JK divider across small 25ns UI tick slices (must not slip when highNs > 25ns)
     const timerDoc = buildTimer555JkDividerPreset();
     const timerSim = new CircuitSimulator(timerDoc);
-    timerSim.advanceBy(300);
-    expect(timerSim.getWaveformHistory().length).toBeGreaterThan(1);
+    timerSim.advanceBy(200);
+    const outStates = new Set<string>();
+    const divStates = new Set<string>();
+    for (let i = 0; i < 12; i++) {
+      const s = timerSim.advanceBy(25);
+      outStates.add(s.nodePinStates.n_555.OUT);
+      divStates.add(s.nodePinStates.n_jk.Q);
+    }
+    expect(outStates.has('0')).toBe(true);
+    expect(outStates.has('1')).toBe(true);
+    expect(divStates.has('0')).toBe(true);
+    expect(divStates.has('1')).toBe(true);
+    expect(timerSim.getWaveformHistory().length).toBeGreaterThan(4);
     const stepSnap = timerSim.stepSingleEvent();
-    expect(stepSnap.currentTimeNs).toBeGreaterThan(300);
+    expect(stepSnap.currentTimeNs).toBeGreaterThan(500);
   });
 
   it('simulates SR-Latch, 4-bit Counter, Microprocessor ALU, and Custom IC Subcircuits', () => {
-    expect(COMPONENT_CATALOG.length).toBeGreaterThanOrEqual(20);
-    expect(PRESET_CIRCUITS).toHaveLength(6);
+    expect(COMPONENT_CATALOG).toHaveLength(32);
+    expect(PRESET_CIRCUITS).toHaveLength(7);
 
     const aluSim = new CircuitSimulator(buildMicroprocessorAluPreset());
     const aluSnap = aluSim.settleCombinational();
@@ -369,5 +419,367 @@ describe('Hybrid Discrete-Event CircuitSimulator', () => {
     const snap = sim.advanceBy(5000);
     expect(snap.status).toBe('OSCILLATION_GUARD');
     expect(snap.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('simulates DIP_SWITCH_4, DECODER_2TO4, COMPARATOR_2BIT, T_FLIPFLOP, REGISTER_4BIT, and SHIFT_REG_SIPO', () => {
+    // 1. Address Decoder & 2-bit Comparator preset with DIP_SWITCH_4
+    const decCompDoc = buildAddressDecoderComparatorPreset();
+    const decSim = new CircuitSimulator(decCompDoc);
+    let snap = decSim.settleCombinational();
+    // Initial DIP = ['1', '0', '1', '0'] -> A = 01 (1), B = 01 (1), EN=1 -> Y1=1, EQ=1
+    expect(snap.nodePinStates.n_led_y1.IN).toBe('1');
+    expect(snap.nodePinStates.n_led_eq.IN).toBe('1');
+    expect(snap.nodePinStates.n_led_gt.IN).toBe('0');
+
+    // Toggle DIP bit 1 (A1 -> 1, so A = 11 = 3 > B = 1) -> Y3=1, GT=1
+    decSim.toggleDipSwitchBit('n_dip_bus', 1);
+    snap = decSim.settleCombinational();
+    expect(snap.nodePinStates.n_dec.Y3).toBe('1');
+    expect(snap.nodePinStates.n_led_gt.IN).toBe('1');
+    expect(snap.nodePinStates.n_led_eq.IN).toBe('0');
+
+    // 2. T-Flip-Flop, 4-bit PIPO Register, and 4-bit SIPO Shift Register
+    const swT = createNodeFromCatalog('INPUT_SWITCH', 'sw_t', { x: 0, y: 0 }, 'T_EN');
+    swT.properties.switchState = '1';
+    const clk = createNodeFromCatalog('CLOCK', 'clk', { x: 0, y: 80 }, 'CLK');
+    clk.properties.halfPeriodNs = 80;
+    const clr = createNodeFromCatalog('CONST_LOW', 'clr', { x: 0, y: 160 }, 'CLR');
+    const tff = createNodeFromCatalog('T_FLIPFLOP', 'tff', { x: 160, y: 20 }, 'TFF');
+    const reg4 = createNodeFromCatalog('REGISTER_4BIT', 'reg4', { x: 160, y: 140 }, 'REG4');
+    const sipo = createNodeFromCatalog('SHIFT_REG_SIPO', 'sipo', { x: 160, y: 300 }, 'SIPO');
+
+    const seqSim = new CircuitSimulator({
+      nodes: [swT, clk, clr, tff, reg4, sipo],
+      edges: [
+        {
+          id: 'e1',
+          sourceNodeId: 'sw_t',
+          sourcePinId: 'OUT',
+          targetNodeId: 'tff',
+          targetPinId: 'T',
+          signalState: '0',
+        },
+        {
+          id: 'e2',
+          sourceNodeId: 'clk',
+          sourcePinId: 'OUT',
+          targetNodeId: 'tff',
+          targetPinId: 'CLK',
+          signalState: '0',
+        },
+        {
+          id: 'e3',
+          sourceNodeId: 'clr',
+          sourcePinId: 'OUT',
+          targetNodeId: 'tff',
+          targetPinId: 'CLR',
+          signalState: '0',
+        },
+        {
+          id: 'e4',
+          sourceNodeId: 'sw_t',
+          sourcePinId: 'OUT',
+          targetNodeId: 'reg4',
+          targetPinId: 'D0',
+          signalState: '0',
+        },
+        {
+          id: 'e5',
+          sourceNodeId: 'sw_t',
+          sourcePinId: 'OUT',
+          targetNodeId: 'reg4',
+          targetPinId: 'LOAD',
+          signalState: '0',
+        },
+        {
+          id: 'e6',
+          sourceNodeId: 'clk',
+          sourcePinId: 'OUT',
+          targetNodeId: 'reg4',
+          targetPinId: 'CLK',
+          signalState: '0',
+        },
+        {
+          id: 'e7',
+          sourceNodeId: 'clr',
+          sourcePinId: 'OUT',
+          targetNodeId: 'reg4',
+          targetPinId: 'CLR',
+          signalState: '0',
+        },
+        {
+          id: 'e8',
+          sourceNodeId: 'sw_t',
+          sourcePinId: 'OUT',
+          targetNodeId: 'sipo',
+          targetPinId: 'SER',
+          signalState: '0',
+        },
+        {
+          id: 'e9',
+          sourceNodeId: 'clk',
+          sourcePinId: 'OUT',
+          targetNodeId: 'sipo',
+          targetPinId: 'CLK',
+          signalState: '0',
+        },
+        {
+          id: 'e10',
+          sourceNodeId: 'clr',
+          sourcePinId: 'OUT',
+          targetNodeId: 'sipo',
+          targetPinId: 'CLR',
+          signalState: '0',
+        },
+      ],
+    });
+
+    // Test stepSingleEvent with halfPeriodNs = 80 (> 50 ns)
+    const stepped = seqSim.stepSingleEvent();
+    expect(stepped.currentTimeNs).toBeGreaterThan(0);
+
+    const afterEdges = seqSim.advanceBy(260);
+    expect(afterEdges.nodePinStates.reg4.Q0).toBe('1');
+    expect(afterEdges.nodePinStates.sipo.Q0).toBe('1');
+    expect(afterEdges.nodePinStates.sipo.Q1).toBe('1');
+  });
+
+  it('preserves simulation time, waveform history, and sequential memory when syncCircuit() is called during live edits', () => {
+    const shiftDoc = buildShiftRegisterPreset();
+    const sim = new CircuitSimulator(shiftDoc);
+
+    // Run simulation to 220 ns so Q0=1, Q1=1 and waveformHistory is populated
+    const snapBefore = sim.advanceBy(220);
+    expect(snapBefore.currentTimeNs).toBe(220);
+    expect(snapBefore.nodePinStates.n_q0.IN).toBe('1');
+    expect(snapBefore.nodePinStates.n_q1.IN).toBe('1');
+    const historyLenBefore = sim.getWaveformHistory().length;
+    expect(historyLenBefore).toBeGreaterThanOrEqual(2);
+
+    // User toggles DIN switch to '0' and drags a node on canvas while simulation is running
+    const updatedDoc = structuredClone(shiftDoc);
+    const dinNode = updatedDoc.nodes.find((n) => n.id === 'n_din')!;
+    dinNode.properties.switchState = '0';
+    dinNode.position = { x: dinNode.position.x + 40, y: dinNode.position.y + 20 };
+
+    // Incremental sync MUST NOT reset time, waveform history, or flip-flop states!
+    sim.syncCircuit(updatedDoc);
+    const snapAfterSync = sim.getSnapshot();
+    expect(snapAfterSync.currentTimeNs).toBe(220);
+    expect(sim.getWaveformHistory().length).toBeGreaterThanOrEqual(historyLenBefore);
+    expect(snapAfterSync.nodePinStates.n_q0.IN).toBe('1');
+    expect(snapAfterSync.nodePinStates.n_q1.IN).toBe('1');
+
+    // Advancing past the next rising clock edge shifts the new DIN='0' into Q0 while Q1 latches the previous Q0='1'
+    const snapNext = sim.advanceBy(100);
+    expect(snapNext.currentTimeNs).toBe(320);
+    expect(snapNext.nodePinStates.n_q0.IN).toBe('0');
+    expect(snapNext.nodePinStates.n_q1.IN).toBe('1');
+
+    // Dynamic topology change via syncCircuit (adding BUFFER, SCHMITT_INV, SR_LATCH) + Counter preset + reset()
+    const buf = createNodeFromCatalog('BUFFER', 'n_buf', { x: 400, y: 100 }, 'BUF1');
+    const schm = createNodeFromCatalog('SCHMITT_INV', 'n_schm', { x: 520, y: 100 }, 'SCHM1');
+    const srl = createNodeFromCatalog('SR_LATCH', 'n_srl', { x: 640, y: 100 }, 'SRL1');
+    const topoDoc = {
+      ...updatedDoc,
+      nodes: [...updatedDoc.nodes, buf, schm, srl],
+      edges: [
+        ...updatedDoc.edges,
+        {
+          id: 'e_buf',
+          sourceNodeId: 'n_din',
+          sourcePinId: 'OUT',
+          targetNodeId: 'n_buf',
+          targetPinId: 'A',
+          signalState: '0' as const,
+        },
+        {
+          id: 'e_schm',
+          sourceNodeId: 'n_buf',
+          sourcePinId: 'Y',
+          targetNodeId: 'n_schm',
+          targetPinId: 'A',
+          signalState: '0' as const,
+        },
+        {
+          id: 'e_srl_s',
+          sourceNodeId: 'n_schm',
+          sourcePinId: 'Y',
+          targetNodeId: 'n_srl',
+          targetPinId: 'S',
+          signalState: '0' as const,
+        },
+      ],
+    };
+    const syncedTopo = sim.syncCircuit(topoDoc);
+    expect(syncedTopo.nodePinStates.n_schm.Y).toBe('1');
+    expect(syncedTopo.nodePinStates.n_srl.Q).toBe('1');
+
+    // Remove added nodes via syncCircuit
+    sim.syncCircuit(updatedDoc);
+    sim.reset();
+    expect(sim.getSnapshot().currentTimeNs).toBe(0);
+
+    // 4-bit synchronous counter with 7-segment hex display preset
+    const cntSim = new CircuitSimulator(buildCounterHexPreset());
+    const cntSnap = cntSim.advanceBy(260);
+    expect(cntSnap.internalMemory.n_cnt.counterValue).toBeGreaterThan(0);
+  });
+
+  it('guards division-by-zero when T_crit === 0, handles NaN inputs, and disambiguates duplicate SOP labels', async () => {
+    const {
+      CircuitImportValidationError,
+      safeParseCircuitSummaryList,
+      safeParseCustomIcList,
+      safeParseUserDto,
+      sanitizeAndValidateCircuitDocument,
+    } = await import('../circuitSanitizer');
+
+    // Empty circuit: T_crit = 0, f_max MUST be 0 (no 1000 MHz or Infinity division by zero)
+    const emptyTiming = analyzeCircuitGraph({ nodes: [], edges: [] });
+    expect(emptyTiming.criticalPathDelayNs).toBe(0);
+    expect(emptyTiming.maxClockFrequencyMhz).toBe(0);
+
+    // Zero-delay circuit: T_crit = 0, f_max = 0
+    const sw0 = createNodeFromCatalog('INPUT_SWITCH', 'sw0', { x: 0, y: 0 }, 'A');
+    sw0.properties.propagationDelayNs = 0;
+    const led0 = createNodeFromCatalog('LED', 'led0', { x: 100, y: 0 }, 'Y');
+    led0.properties.propagationDelayNs = 0;
+    const zeroTiming = analyzeCircuitGraph({ nodes: [sw0, led0], edges: [] });
+    expect(zeroTiming.criticalPathDelayNs).toBe(0);
+    expect(zeroTiming.maxClockFrequencyMhz).toBe(0);
+
+    // NE555 NaN safety
+    const safeRc = computeTimer555Intervals(Number.NaN, -50, Number.NaN);
+    expect(Number.isFinite(safeRc.highNs)).toBe(true);
+    expect(Number.isFinite(safeRc.frequencyHz)).toBe(true);
+
+    // Duplicate input labels in truth table synthesizer
+    const swDup1 = createNodeFromCatalog('INPUT_SWITCH', 'dup_1', { x: 0, y: 0 }, 'A');
+    const swDup2 = createNodeFromCatalog('INPUT_SWITCH', 'dup_2', { x: 0, y: 80 }, 'A');
+    const andGate = createNodeFromCatalog('AND', 'dup_and', { x: 160, y: 30 }, 'G_AND');
+    const outDup = createNodeFromCatalog('PROBE', 'dup_out', { x: 320, y: 35 }, 'OUT');
+    const dupTt = synthesizeTruthTable({
+      nodes: [swDup1, swDup2, andGate, outDup],
+      edges: [
+        {
+          id: 'de1',
+          sourceNodeId: 'dup_1',
+          sourcePinId: 'OUT',
+          targetNodeId: 'dup_and',
+          targetPinId: 'A',
+          signalState: '0',
+        },
+        {
+          id: 'de2',
+          sourceNodeId: 'dup_2',
+          sourcePinId: 'OUT',
+          targetNodeId: 'dup_and',
+          targetPinId: 'B',
+          signalState: '0',
+        },
+        {
+          id: 'de3',
+          sourceNodeId: 'dup_and',
+          sourcePinId: 'Y',
+          targetNodeId: 'dup_out',
+          targetPinId: 'IN',
+          signalState: '0',
+        },
+      ],
+    });
+    expect(dupTt.inputLabels.map((i) => i.label)).toEqual(['A', 'A_2']);
+    expect(dupTt.rows).toHaveLength(4);
+    expect(dupTt.canonicalSopExpressions.OUT).toBe('(A · A_2)');
+
+    // Mutual recursion guard on nested CUSTOM_IC
+    const icRecA: CustomICDefinition = {
+      id: 'ic_rec_a',
+      name: 'Recursive A',
+      code: 'RECA',
+      description: '',
+      propagationDelayNs: 10,
+      inputPins: [{ id: 'IN', name: 'IN', mappedNodeId: 'ra_sw' }],
+      outputPins: [{ id: 'OUT', name: 'OUT', mappedNodeId: 'ra_prb' }],
+      internalCircuit: {
+        nodes: [
+          createNodeFromCatalog('INPUT_SWITCH', 'ra_sw', { x: 0, y: 0 }, 'IN'),
+          createNodeFromCatalog('CUSTOM_IC', 'ra_sub', { x: 120, y: 0 }, 'B', {
+            id: 'ic_rec_b',
+            name: 'Recursive B',
+            code: 'RECB',
+            description: '',
+            propagationDelayNs: 10,
+            inputPins: [{ id: 'IN', name: 'IN', mappedNodeId: 'rb_sw' }],
+            outputPins: [{ id: 'OUT', name: 'OUT', mappedNodeId: 'rb_prb' }],
+            internalCircuit: { nodes: [], edges: [] },
+          }),
+          createNodeFromCatalog('PROBE', 'ra_prb', { x: 280, y: 0 }, 'OUT'),
+        ],
+        edges: [
+          {
+            id: 're1',
+            sourceNodeId: 'ra_sub',
+            sourcePinId: 'OUT',
+            targetNodeId: 'ra_prb',
+            targetPinId: 'IN',
+            signalState: '0',
+          },
+        ],
+      },
+    };
+    const icRecB: CustomICDefinition = {
+      ...icRecA,
+      id: 'ic_rec_b',
+      internalCircuit: {
+        nodes: [createNodeFromCatalog('CUSTOM_IC', 'rb_sub', { x: 100, y: 0 }, 'A', icRecA)],
+        edges: [],
+      },
+    };
+    const topRecIc = createNodeFromCatalog(
+      'CUSTOM_IC',
+      'top_rec',
+      { x: 100, y: 0 },
+      'U_REC',
+      icRecA,
+    );
+    const recSim = new CircuitSimulator({
+      nodes: [topRecIc],
+      edges: [],
+      customDefinitions: [icRecA, icRecB],
+    });
+    expect(recSim.settleCombinational(200).status).toBe('STABLE');
+
+    // Sanitizer: valid preset passes cleanly & prototype pollution keys stripped cleanly
+    const validPreset = buildFullAdderPreset();
+    const withProtoStr = JSON.stringify(validPreset).replace(
+      '{',
+      '{"__proto__":{"polluted":"yes"},"constructor":{"prototype":{"hacked":true}},',
+    );
+    const sanitized = sanitizeAndValidateCircuitDocument(withProtoStr);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(sanitized, '__proto__')).toBe(false);
+    expect(sanitized.nodes).toHaveLength(validPreset.nodes.length);
+
+    // Sanitizer rejects invalid syntax, dangling pin references, and oversized node count
+    expect(() => sanitizeAndValidateCircuitDocument('{not-json')).toThrow(
+      CircuitImportValidationError,
+    );
+    const brokenPinDoc = structuredClone(validPreset);
+    brokenPinDoc.edges[0].targetPinId = 'NON_EXISTENT_PIN';
+    expect(() => sanitizeAndValidateCircuitDocument(brokenPinDoc)).toThrow(
+      CircuitImportValidationError,
+    );
+    const hugeDoc = structuredClone(validPreset);
+    for (let i = 0; i < 260; i++) {
+      hugeDoc.nodes.push(createNodeFromCatalog('AND', `extra_${i}`, { x: i * 10, y: 0 }));
+    }
+    expect(() => sanitizeAndValidateCircuitDocument(hugeDoc)).toThrow(CircuitImportValidationError);
+
+    // LocalStorage safe corruption recovery
+    expect(safeParseUserDto('{corrupt')).toBeNull();
+    expect(safeParseUserDto('{"id":"1","email":"bad-email"}')).toBeNull();
+    expect(safeParseCustomIcList('{bad')).toEqual([]);
+    expect(safeParseCircuitSummaryList('{bad')).toEqual([]);
   });
 });

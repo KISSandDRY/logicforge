@@ -2,8 +2,11 @@ import { analyzeCircuitGraph, extractElectricalNets, pinKey } from './graphAnaly
 import {
   computeTimer555Intervals,
   evaluateAluSlice,
+  evaluateComparator2Bit,
+  evaluateDecoder2To4,
   evaluateMux4To1,
   logicAnd,
+  logicBuffer,
   logicNand,
   logicNor,
   logicNot,
@@ -35,6 +38,14 @@ interface InternalSequentialState {
 }
 
 const MAX_EVENTS_PER_WINDOW = 2500;
+const MAX_CUSTOM_IC_NESTING_DEPTH = 8;
+
+function sanitizeDelayNs(rawDelay: number | undefined, fallback = 0): number {
+  if (typeof rawDelay !== 'number' || !Number.isFinite(rawDelay)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(10000, rawDelay));
+}
 
 /**
  * Гібридне ядро симуляції цифрових логічних схем:
@@ -65,8 +76,13 @@ export class CircuitSimulator {
   private warnings: string[] = [];
   private waveformHistory: WaveformSample[] = [];
   private readonly maxWaveformSamples = 160;
+  private readonly nestingDepth: number;
 
-  constructor(doc?: Pick<CircuitDocument, 'nodes' | 'edges' | 'customDefinitions'>) {
+  constructor(
+    doc?: Pick<CircuitDocument, 'nodes' | 'edges' | 'customDefinitions'>,
+    options?: { nestingDepth?: number },
+  ) {
+    this.nestingDepth = options?.nestingDepth ?? 0;
     if (doc) {
       this.loadCircuit(doc);
     }
@@ -100,6 +116,8 @@ export class CircuitSimulator {
       this.nodes.set(cloned.id, cloned);
 
       for (const pin of cloned.pins) {
+        const dipIdx =
+          cloned.type === 'DIP_SWITCH_4' && pin.id.startsWith('Q') ? Number(pin.id.slice(1)) : -1;
         const initial: LogicState =
           cloned.type === 'CONST_HIGH' && pin.direction === 'OUTPUT'
             ? '1'
@@ -108,9 +126,11 @@ export class CircuitSimulator {
               : (cloned.type === 'INPUT_SWITCH' || cloned.type === 'PUSH_BUTTON') &&
                   pin.direction === 'OUTPUT'
                 ? (cloned.properties.switchState ?? '0')
-                : pin.direction === 'INPUT'
-                  ? 'Z'
-                  : '0';
+                : dipIdx >= 0 && dipIdx < 4
+                  ? (cloned.properties.dipSwitchStates?.[dipIdx] ?? '0')
+                  : pin.direction === 'INPUT'
+                    ? 'Z'
+                    : '0';
         this.pinStates.set(pinKey(cloned.id, pin.id), initial);
       }
 
@@ -138,6 +158,10 @@ export class CircuitSimulator {
     this.loadCircuit(doc);
   }
 
+  public clearWaveformHistory(): void {
+    this.waveformHistory = [];
+  }
+
   public setInputState(nodeId: string, newState: LogicState): void {
     const node = this.nodes.get(nodeId);
     if (!node) return;
@@ -148,7 +172,7 @@ export class CircuitSimulator {
       node.id,
       'OUT',
       newState,
-      Math.max(0, node.properties.propagationDelayNs),
+      sanitizeDelayNs(node.properties.propagationDelayNs, 0),
       'User input change',
     );
   }
@@ -167,12 +191,213 @@ export class CircuitSimulator {
     return next;
   }
 
+  public setDipSwitchBit(nodeId: string, bitIndex: number, newState: LogicState): void {
+    const node = this.nodes.get(nodeId);
+    if (!node || node.type !== 'DIP_SWITCH_4') return;
+    if (bitIndex < 0 || bitIndex > 3) return;
+    const currentTuple: [LogicState, LogicState, LogicState, LogicState] = [
+      ...(node.properties.dipSwitchStates ?? ['0', '0', '0', '0']),
+    ] as [LogicState, LogicState, LogicState, LogicState];
+    currentTuple[bitIndex] = newState;
+    node.properties.dipSwitchStates = currentTuple;
+    this.scheduleOutputTransition(
+      node.id,
+      `Q${bitIndex}`,
+      newState,
+      sanitizeDelayNs(node.properties.propagationDelayNs, 0),
+      `DIP switch Q${bitIndex} change`,
+    );
+  }
+
+  public toggleDipSwitchBit(nodeId: string, bitIndex: number): LogicState {
+    const node = this.nodes.get(nodeId);
+    if (!node || node.type !== 'DIP_SWITCH_4') return '0';
+    const current = node.properties.dipSwitchStates?.[bitIndex] ?? '0';
+    const next: LogicState = current === '1' ? '0' : '1';
+    this.setDipSwitchBit(nodeId, bitIndex, next);
+    return next;
+  }
+
+  /**
+   * Інкрементальна синхронізація топології та параметрів схеми БЕЗ скидання модельного часу,
+   * черги подій, осцилограм і станів тригерів/лічильників.
+   */
+  public syncCircuit(
+    doc: Pick<CircuitDocument, 'nodes' | 'edges' | 'customDefinitions'>,
+  ): SimulationSnapshot {
+    this.customIcMap.clear();
+    for (const ic of doc.customDefinitions ?? []) {
+      this.customIcMap.set(ic.id, ic);
+    }
+
+    const incomingNodeIds = new Set(doc.nodes.map((n) => n.id));
+    let topologyChanged = false;
+
+    for (const existingId of Array.from(this.nodes.keys())) {
+      if (!incomingNodeIds.has(existingId)) {
+        const oldNode = this.nodes.get(existingId)!;
+        for (const p of oldNode.pins) {
+          const k = pinKey(existingId, p.id);
+          this.pinStates.delete(k);
+          this.scheduledPinTarget.delete(k);
+        }
+        this.nodes.delete(existingId);
+        this.seqMemory.delete(existingId);
+        topologyChanged = true;
+      }
+    }
+
+    for (const rawNode of doc.nodes) {
+      const existing = this.nodes.get(rawNode.id);
+      if (!existing) {
+        topologyChanged = true;
+        const cloned: CircuitNodeData = {
+          ...rawNode,
+          position: { ...rawNode.position },
+          properties: { ...rawNode.properties },
+          pins: rawNode.pins.map((p) => ({ ...p, offset: { ...p.offset } })),
+        };
+        this.nodes.set(cloned.id, cloned);
+        for (const pin of cloned.pins) {
+          const dipIdx =
+            cloned.type === 'DIP_SWITCH_4' && pin.id.startsWith('Q') ? Number(pin.id.slice(1)) : -1;
+          const initial: LogicState =
+            cloned.type === 'CONST_HIGH' && pin.direction === 'OUTPUT'
+              ? '1'
+              : cloned.type === 'CONST_LOW' && pin.direction === 'OUTPUT'
+                ? '0'
+                : (cloned.type === 'INPUT_SWITCH' || cloned.type === 'PUSH_BUTTON') &&
+                    pin.direction === 'OUTPUT'
+                  ? (cloned.properties.switchState ?? '0')
+                  : dipIdx >= 0 && dipIdx < 4
+                    ? (cloned.properties.dipSwitchStates?.[dipIdx] ?? '0')
+                    : pin.direction === 'INPUT'
+                      ? 'Z'
+                      : '0';
+          this.pinStates.set(pinKey(cloned.id, pin.id), initial);
+        }
+        this.seqMemory.set(cloned.id, {
+          q: '0',
+          prevClk: '0',
+          counterValue: 0,
+          timerPhase: 'LOW',
+          nextTimerToggleNs: 0,
+        });
+      } else {
+        const prevSwitch = existing.properties.switchState;
+        const prevDip = existing.properties.dipSwitchStates;
+        const prevDelay = existing.properties.propagationDelayNs;
+        const prevR1 = existing.properties.resistanceR1Ohms;
+        const prevR2 = existing.properties.resistanceR2Ohms;
+        const prevCap = existing.properties.capacitanceUf;
+        const prevAuto = existing.properties.astableAutoTrigger;
+
+        existing.position = { ...rawNode.position };
+        existing.properties = { ...rawNode.properties };
+        existing.pins = rawNode.pins.map((p) => ({ ...p, offset: { ...p.offset } }));
+
+        if (
+          existing.type === 'TIMER_555' &&
+          (rawNode.properties.resistanceR1Ohms !== prevR1 ||
+            rawNode.properties.resistanceR2Ohms !== prevR2 ||
+            rawNode.properties.capacitanceUf !== prevCap ||
+            rawNode.properties.astableAutoTrigger !== prevAuto)
+        ) {
+          const mem = this.seqMemory.get(existing.id);
+          if (mem) {
+            mem.nextTimerToggleNs = this.currentTimeNs;
+          }
+        }
+
+        if (
+          (existing.type === 'INPUT_SWITCH' || existing.type === 'PUSH_BUTTON') &&
+          rawNode.properties.switchState !== undefined &&
+          rawNode.properties.switchState !== prevSwitch
+        ) {
+          const k = pinKey(existing.id, 'OUT');
+          this.pinStates.set(k, rawNode.properties.switchState);
+          const net = this.pinToNet.get(k);
+          if (net) {
+            for (const nid of this.propagateNet(net)) {
+              const downstream = this.nodes.get(nid);
+              if (downstream) this.evaluateNodeAndSchedule(downstream);
+            }
+          }
+        }
+
+        if (existing.type === 'DIP_SWITCH_4' && rawNode.properties.dipSwitchStates) {
+          for (let i = 0; i < 4; i++) {
+            const nextBit = rawNode.properties.dipSwitchStates[i] ?? '0';
+            if (!prevDip || prevDip[i] !== nextBit) {
+              const k = pinKey(existing.id, `Q${i}`);
+              this.pinStates.set(k, nextBit);
+              const net = this.pinToNet.get(k);
+              if (net) {
+                for (const nid of this.propagateNet(net)) {
+                  const downstream = this.nodes.get(nid);
+                  if (downstream) this.evaluateNodeAndSchedule(downstream);
+                }
+              }
+            }
+          }
+        }
+
+        if (rawNode.properties.propagationDelayNs !== prevDelay) {
+          this.evaluateNodeAndSchedule(existing);
+        }
+      }
+    }
+
+    const oldEdgesSig = this.edges
+      .map((e) => `${e.sourceNodeId}:${e.sourcePinId}->${e.targetNodeId}:${e.targetPinId}`)
+      .sort()
+      .join('|');
+    const newEdgesSig = doc.edges
+      .map((e) => `${e.sourceNodeId}:${e.sourcePinId}->${e.targetNodeId}:${e.targetPinId}`)
+      .sort()
+      .join('|');
+
+    if (oldEdgesSig !== newEdgesSig) {
+      topologyChanged = true;
+    }
+
+    this.edges = doc.edges.map((e) => ({ ...e }));
+
+    if (topologyChanged) {
+      // Reset unconnected input pins to Z before rebuilding nets
+      for (const node of this.nodes.values()) {
+        for (const p of node.pins) {
+          if (p.direction === 'INPUT') {
+            this.pinStates.set(pinKey(node.id, p.id), 'Z');
+          }
+        }
+      }
+      this.rebuildNets();
+      for (const net of this.nets) {
+        this.propagateNet(net);
+      }
+      for (const node of this.nodes.values()) {
+        this.evaluateNodeAndSchedule(node);
+      }
+    }
+
+    if (this.currentTimeNs === 0 || topologyChanged) {
+      return this.settleCombinational(300);
+    }
+    this.updateSystemStatus();
+    return this.getSnapshot();
+  }
+
   /**
    * Просування модельного часу на deltaNs із обробкою всіх запланованих подій у купі Min-Heap
    * та генерацією чергових імпульсів синхрогенераторів CLOCK і таймерів NE555.
    */
   public advanceBy(deltaNs: number): SimulationSnapshot {
-    const targetTimeNs = this.currentTimeNs + Math.max(1, deltaNs);
+    if (this.waveformHistory.length === 0) {
+      this.recordWaveformSample();
+    }
+    const safeDeltaNs = Number.isFinite(deltaNs) ? Math.max(1, Math.min(100000, deltaNs)) : 1;
+    const targetTimeNs = this.currentTimeNs + safeDeltaNs;
     this.enqueuePeriodicSourcesUpTo(targetTimeNs);
 
     let processedInWindow = 0;
@@ -207,7 +432,14 @@ export class CircuitSimulator {
         }
 
         const prevState = this.pinStates.get(k);
-        if (prevState !== ev.newState) {
+        const evNode = this.nodes.get(ev.nodeId);
+        const suppressedByReset =
+          evNode?.type === 'TIMER_555' &&
+          Boolean(ev.reason?.startsWith('NE555')) &&
+          this.getPin(ev.nodeId, 'RESET') === '0' &&
+          ev.newState !== '0';
+
+        if (!suppressedByReset && prevState !== ev.newState) {
           this.pinStates.set(k, ev.newState);
           this.processedEventsCount += 1;
           processedInWindow += 1;
@@ -229,6 +461,8 @@ export class CircuitSimulator {
         }
       }
 
+      this.recordWaveformSample();
+
       // Якщо таймер 555 змінив фазу або скидання, перевіримо періодичні джерела
       this.enqueuePeriodicSourcesUpTo(targetTimeNs);
     }
@@ -244,7 +478,20 @@ export class CircuitSimulator {
    */
   public stepSingleEvent(): SimulationSnapshot {
     if (this.eventQueue.isEmpty()) {
-      this.enqueuePeriodicSourcesUpTo(this.currentTimeNs + 50);
+      let maxLookahead = 50;
+      for (const node of this.nodes.values()) {
+        if (node.type === 'CLOCK') {
+          maxLookahead = Math.max(maxLookahead, (node.properties.halfPeriodNs ?? 50) + 10);
+        } else if (node.type === 'TIMER_555') {
+          const iv = computeTimer555Intervals(
+            node.properties.resistanceR1Ohms,
+            node.properties.resistanceR2Ohms,
+            node.properties.capacitanceUf,
+          );
+          maxLookahead = Math.max(maxLookahead, Math.max(iv.highNs, iv.lowNs) + 10);
+        }
+      }
+      this.enqueuePeriodicSourcesUpTo(this.currentTimeNs + maxLookahead);
     }
     const next = this.eventQueue.peek();
     if (!next) {
@@ -258,7 +505,10 @@ export class CircuitSimulator {
    * Стабілізує всі комбінаційні та асинхронні перехідні процеси без просування зовнішніх генераторів CLOCK.
    */
   public settleCombinational(maxTimeBudgetNs = 1000): SimulationSnapshot {
-    const deadline = this.currentTimeNs + maxTimeBudgetNs;
+    const safeBudget = Number.isFinite(maxTimeBudgetNs)
+      ? Math.max(10, Math.min(100000, maxTimeBudgetNs))
+      : 1000;
+    const deadline = this.currentTimeNs + safeBudget;
     let guard = 0;
 
     while (!this.eventQueue.isEmpty() && guard < MAX_EVENTS_PER_WINDOW) {
@@ -290,8 +540,17 @@ export class CircuitSimulator {
           this.evaluateNodeAndSchedule(node);
         }
       }
+      this.recordWaveformSample();
     }
 
+    if (guard >= MAX_EVENTS_PER_WINDOW) {
+      this.status = 'OSCILLATION_GUARD';
+      this.warnings.push(
+        `Спрацював захист від асинхронної осциляції (${MAX_EVENTS_PER_WINDOW} подій під час стабілізації).`,
+      );
+    }
+
+    this.recordWaveformSample();
     this.updateSystemStatus();
     return this.getSnapshot();
   }
@@ -464,9 +723,21 @@ export class CircuitSimulator {
       case 'INPUT_SWITCH':
       case 'PUSH_BUTTON':
         return { OUT: node.properties.switchState ?? '0' };
+      case 'DIP_SWITCH_4': {
+        const dip = node.properties.dipSwitchStates ?? ['0', '0', '0', '0'];
+        return {
+          Q0: dip[0] ?? '0',
+          Q1: dip[1] ?? '0',
+          Q2: dip[2] ?? '0',
+          Q3: dip[3] ?? '0',
+        };
+      }
       case 'CLOCK':
         return { OUT: this.getPin(node.id, 'OUT') === '1' ? '1' : '0' };
+      case 'BUFFER':
+        return { Y: logicBuffer(this.getPin(node.id, 'A')) };
       case 'NOT':
+      case 'SCHMITT_INV':
         return { Y: logicNot(this.getPin(node.id, 'A')) };
       case 'AND':
         return { Y: logicAnd([this.getPin(node.id, 'A'), this.getPin(node.id, 'B')]) };
@@ -547,12 +818,99 @@ export class CircuitSimulator {
           } else if (j === '1' && k === '0') {
             mem.q = '1';
           } else if (j === '1' && k === '1') {
-            mem.q = mem.q === '1' ? '0' : mem.q === '0' ? '1' : '0';
+            mem.q = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
           }
         }
         mem.prevClk = clk;
         const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
         return { Q: mem.q, NQ: nq };
+      }
+
+      case 'T_FLIPFLOP': {
+        const t =
+          this.getPin(node.id, 'T') === 'Z' ? '0' : normalizeGateInput(this.getPin(node.id, 'T'));
+        const clk =
+          this.getPin(node.id, 'CLK') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLK'));
+        const clr =
+          this.getPin(node.id, 'CLR') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLR'));
+
+        if (clr === '1') {
+          mem.q = '0';
+        } else if (mem.prevClk === '0' && clk === '1') {
+          if (t === 'X') {
+            mem.q = 'X';
+          } else if (t === '1') {
+            mem.q = mem.q === '1' ? '0' : '1';
+          }
+        }
+        mem.prevClk = clk;
+        const nq: LogicState = mem.q === '1' ? '0' : mem.q === '0' ? '1' : 'X';
+        return { Q: mem.q, NQ: nq };
+      }
+
+      case 'REGISTER_4BIT': {
+        const clk =
+          this.getPin(node.id, 'CLK') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLK'));
+        const loadRaw = this.getPin(node.id, 'LOAD');
+        const load = loadRaw === 'Z' ? '1' : normalizeGateInput(loadRaw);
+        const clr =
+          this.getPin(node.id, 'CLR') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLR'));
+
+        if (clr === '1') {
+          mem.counterValue = 0;
+        } else if (mem.prevClk === '0' && clk === '1' && load === '1') {
+          const d0 = this.getPin(node.id, 'D0') === '1' ? 1 : 0;
+          const d1 = this.getPin(node.id, 'D1') === '1' ? 2 : 0;
+          const d2 = this.getPin(node.id, 'D2') === '1' ? 4 : 0;
+          const d3 = this.getPin(node.id, 'D3') === '1' ? 8 : 0;
+          mem.counterValue = d0 | d1 | d2 | d3;
+        }
+        mem.prevClk = clk;
+        const v = mem.counterValue;
+        return {
+          Q0: (v & 1) !== 0 ? '1' : '0',
+          Q1: (v & 2) !== 0 ? '1' : '0',
+          Q2: (v & 4) !== 0 ? '1' : '0',
+          Q3: (v & 8) !== 0 ? '1' : '0',
+        };
+      }
+
+      case 'SHIFT_REG_SIPO': {
+        const clk =
+          this.getPin(node.id, 'CLK') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLK'));
+        const ser =
+          this.getPin(node.id, 'SER') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'SER'));
+        const clr =
+          this.getPin(node.id, 'CLR') === 'Z'
+            ? '0'
+            : normalizeGateInput(this.getPin(node.id, 'CLR'));
+
+        if (clr === '1') {
+          mem.counterValue = 0;
+        } else if (mem.prevClk === '0' && clk === '1') {
+          const inBit = ser === '1' ? 1 : 0;
+          mem.counterValue = ((mem.counterValue << 1) | inBit) & 0x0f;
+        }
+        mem.prevClk = clk;
+        const v = mem.counterValue;
+        return {
+          Q0: (v & 1) !== 0 ? '1' : '0',
+          Q1: (v & 2) !== 0 ? '1' : '0',
+          Q2: (v & 4) !== 0 ? '1' : '0',
+          Q3: (v & 8) !== 0 ? '1' : '0',
+        };
       }
 
       case 'COUNTER_4BIT': {
@@ -620,6 +978,23 @@ export class CircuitSimulator {
         return { Y: y };
       }
 
+      case 'DECODER_2TO4': {
+        return evaluateDecoder2To4(
+          this.getPin(node.id, 'A0'),
+          this.getPin(node.id, 'A1'),
+          this.getPin(node.id, 'EN'),
+        );
+      }
+
+      case 'COMPARATOR_2BIT': {
+        return evaluateComparator2Bit(
+          this.getPin(node.id, 'A0'),
+          this.getPin(node.id, 'A1'),
+          this.getPin(node.id, 'B0'),
+          this.getPin(node.id, 'B1'),
+        );
+      }
+
       case 'ALU_4BIT': {
         const res = evaluateAluSlice(
           this.getPin(node.id, 'A0'),
@@ -641,18 +1016,23 @@ export class CircuitSimulator {
         const icDef = node.properties.customIcId
           ? this.customIcMap.get(node.properties.customIcId)
           : undefined;
-        if (!icDef) {
+        if (!icDef || this.nestingDepth >= MAX_CUSTOM_IC_NESTING_DEPTH) {
           const fallback: Record<string, LogicState> = {};
           for (const p of node.pins) {
             if (p.direction === 'OUTPUT') fallback[p.id] = 'X';
           }
           return fallback;
         }
-        const subSim = new CircuitSimulator({
-          nodes: icDef.internalCircuit.nodes,
-          edges: icDef.internalCircuit.edges,
-          customDefinitions: Array.from(this.customIcMap.values()).filter((d) => d.id !== icDef.id),
-        });
+        const subSim = new CircuitSimulator(
+          {
+            nodes: icDef.internalCircuit.nodes,
+            edges: icDef.internalCircuit.edges,
+            customDefinitions: Array.from(this.customIcMap.values()).filter(
+              (d) => d.id !== icDef.id,
+            ),
+          },
+          { nestingDepth: this.nestingDepth + 1 },
+        );
         for (const inMap of icDef.inputPins) {
           const extVal = this.getPin(node.id, inMap.id);
           subSim.setInputState(inMap.mappedNodeId, extVal === 'Z' ? '0' : extVal);
@@ -661,7 +1041,7 @@ export class CircuitSimulator {
         const result: Record<string, LogicState> = {};
         for (const outMap of icDef.outputPins) {
           const mappedPins = subSnap.nodePinStates[outMap.mappedNodeId] ?? {};
-          result[outMap.id] = mappedPins.IN ?? mappedPins.P ?? mappedPins.OUT ?? '0';
+          result[outMap.id] = mappedPins.IN ?? mappedPins.P ?? mappedPins.OUT ?? 'Z';
         }
         return result;
       }
@@ -673,7 +1053,7 @@ export class CircuitSimulator {
 
   private evaluateNodeAndSchedule(node: CircuitNodeData): void {
     const outputs = this.computeNodeOutputsImmediate(node);
-    const delay = Math.max(1, node.properties.propagationDelayNs);
+    const delay = Math.max(1, sanitizeDelayNs(node.properties.propagationDelayNs, 1));
     for (const [pinId, nextState] of Object.entries(outputs)) {
       this.scheduleOutputTransition(node.id, pinId, nextState, delay);
     }
@@ -689,15 +1069,16 @@ export class CircuitSimulator {
     const k = pinKey(nodeId, pinId);
     const currentState = this.pinStates.get(k);
     const scheduled = this.scheduledPinTarget.get(k);
+    const safeDelay = Number.isFinite(delayNs) ? Math.max(0, delayNs) : 0;
+    const timestampNs = this.currentTimeNs + safeDelay;
 
     if (!scheduled && currentState === newState) {
       return;
     }
-    if (scheduled && scheduled.state === newState) {
+    if (scheduled && scheduled.state === newState && scheduled.timestampNs <= timestampNs) {
       return;
     }
 
-    const timestampNs = this.currentTimeNs + Math.max(0, delayNs);
     this.scheduledPinTarget.set(k, { state: newState, timestampNs });
     this.sequenceCounter += 1;
     this.eventQueue.push({
@@ -713,7 +1094,11 @@ export class CircuitSimulator {
   private enqueuePeriodicSourcesUpTo(targetTimeNs: number): void {
     for (const node of this.nodes.values()) {
       if (node.type === 'CLOCK') {
-        const halfPeriod = Math.max(10, node.properties.halfPeriodNs ?? 50);
+        const rawHalf = node.properties.halfPeriodNs;
+        const halfPeriod = Math.max(
+          10,
+          typeof rawHalf === 'number' && Number.isFinite(rawHalf) ? rawHalf : 50,
+        );
         const k = pinKey(node.id, 'OUT');
         if (!this.scheduledPinTarget.has(k)) {
           const nextFlip = Math.floor(this.currentTimeNs / halfPeriod) * halfPeriod + halfPeriod;
@@ -733,30 +1118,41 @@ export class CircuitSimulator {
           }
         }
       } else if (node.type === 'TIMER_555') {
+        const mem = this.seqMemory.get(node.id)!;
         const rstPin = this.getPin(node.id, 'RESET');
         const autoAstable = node.properties.astableAutoTrigger ?? true;
-        if (rstPin !== '0' && autoAstable) {
-          const mem = this.seqMemory.get(node.id)!;
+        if (rstPin === '0') {
+          mem.q = '0';
+          mem.timerPhase = 'LOW';
+          mem.nextTimerToggleNs = this.currentTimeNs;
+          continue;
+        }
+        if (autoAstable) {
           const outKey = pinKey(node.id, 'OUT');
-          if (!this.scheduledPinTarget.has(outKey)) {
+          const dischKey = pinKey(node.id, 'DISCH');
+          const trig = this.getPin(node.id, 'TRIG');
+          const thres = this.getPin(node.id, 'THRES');
+          const heldLow = thres === '1' && trig !== '0';
+          const heldHigh = trig === '0' && thres !== '1';
+          if (!heldLow && !heldHigh && !this.scheduledPinTarget.has(outKey)) {
             const intervals = computeTimer555Intervals(
               node.properties.resistanceR1Ohms,
               node.properties.resistanceR2Ohms,
               node.properties.capacitanceUf,
             );
             const curOut = this.pinStates.get(outKey) ?? '0';
-            const stepDuration = curOut === '1' ? intervals.highNs : intervals.lowNs;
-            const nextTime = Math.max(
-              this.currentTimeNs + stepDuration,
-              mem.nextTimerToggleNs > this.currentTimeNs
-                ? mem.nextTimerToggleNs
-                : this.currentTimeNs + stepDuration,
-            );
+            const phaseDuration = curOut === '1' ? intervals.highNs : intervals.lowNs;
+            if (mem.nextTimerToggleNs <= this.currentTimeNs) {
+              mem.nextTimerToggleNs = this.currentTimeNs + phaseDuration;
+            }
+            const nextTime = mem.nextTimerToggleNs;
             if (nextTime <= targetTimeNs) {
               const nextOut: LogicState = curOut === '1' ? '0' : '1';
+              const nextPhaseDuration = nextOut === '1' ? intervals.highNs : intervals.lowNs;
               mem.q = nextOut;
               mem.timerPhase = nextOut === '1' ? 'HIGH' : 'LOW';
-              mem.nextTimerToggleNs = nextTime;
+              mem.nextTimerToggleNs = nextTime + nextPhaseDuration;
+
               this.scheduledPinTarget.set(outKey, { state: nextOut, timestampNs: nextTime });
               this.sequenceCounter += 1;
               this.eventQueue.push({
@@ -767,13 +1163,16 @@ export class CircuitSimulator {
                 newState: nextOut,
                 reason: 'NE555 RC comparator threshold',
               });
+
+              const nextDisch: LogicState = nextOut === '1' ? 'Z' : '0';
+              this.scheduledPinTarget.set(dischKey, { state: nextDisch, timestampNs: nextTime });
               this.sequenceCounter += 1;
               this.eventQueue.push({
                 timestampNs: nextTime,
                 sequence: this.sequenceCounter,
                 nodeId: node.id,
                 pinId: 'DISCH',
-                newState: nextOut === '1' ? 'Z' : '0',
+                newState: nextDisch,
                 reason: 'NE555 discharge transistor',
               });
             }
@@ -788,10 +1187,16 @@ export class CircuitSimulator {
     for (const node of this.nodes.values()) {
       if (
         node.type === 'INPUT_SWITCH' ||
+        node.type === 'PUSH_BUTTON' ||
+        node.type === 'DIP_SWITCH_4' ||
         node.type === 'CLOCK' ||
         node.type === 'TIMER_555' ||
+        node.type === 'SR_LATCH' ||
         node.type === 'D_FLIPFLOP' ||
         node.type === 'JK_FLIPFLOP' ||
+        node.type === 'T_FLIPFLOP' ||
+        node.type === 'REGISTER_4BIT' ||
+        node.type === 'SHIFT_REG_SIPO' ||
         node.type === 'COUNTER_4BIT'
       ) {
         const primaryOut = node.pins.find((p) => p.direction === 'OUTPUT');
